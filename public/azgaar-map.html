@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fantasy Map Generator</title>
+  <link rel="stylesheet" href="/lib/fantasy-map-generator/style.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+    #saveToApp {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 1000;
+      padding: 10px 15px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="tooltip"></div>
+  <div id="optionsContainer"></div>
+  
+  <button id="saveToApp">Save Map to App</button>
+
+  <!-- Load scripts -->
+  <script src="/lib/fantasy-map-generator/dragndrop.js"></script>
+  <script src="/lib/fantasy-map-generator/FileSaver.js"></script>
+  <script src="/lib/fantasy-map-generator/generators.js"></script>
+  <script src="/lib/fantasy-map-generator/main.js"></script>
+  <script src="/lib/fantasy-map-generator/mapping.js"></script>
+  <script src="/lib/fantasy-map-generator/modules/ui/editors.js"></script>
+  <script src="/lib/fantasy-map-generator/modules/ui/general.js"></script>
+  <script src="/lib/fantasy-map-generator/modules/ui/tools.js"></script>
+
+  <script>
+    // Communication with parent frame
+    document.getElementById('saveToApp').addEventListener('click', function() {
+      // Extract map data
+      const mapData = convertMapToParentFormat(window.map);
+      
+      // Send to parent window
+      window.parent.postMessage({
+        type: 'mapData',
+        mapData: mapData
+      }, '*');
+    });
+    
+    function convertMapToParentFormat(map) {
+      // Prepare nodes array for settlements (burgs)
+      const nodes = [];
+      const edges = [];
+      
+      if (map && map.burgs) {
+        map.burgs.forEach((burg, index) => {
+          if (burg.i === 0) return; // Skip the first empty entry
+          
+          nodes.push({
+            id: `settlement-${burg.i}`,
+            type: 'environment',
+            position: { x: burg.x, y: burg.y },
+            data: {
+              label: burg.name,
+              description: `A ${burg.type || 'settlement'} in ${map.states && map.states[burg.state] ? map.states[burg.state].name : 'unknown territory'}`,
+              climate: 'Temperate',
+              population: burg.population
+            }
+          });
+        });
+      }
+      
+      if (map && map.states) {
+        map.states.forEach((state, index) => {
+          if (state.i === 0) return; // Skip the first empty entry
+          
+          // Find a reasonable center point for the state
+          const x = state.center ? state.center[0] : 400;
+          const y = state.center ? state.center[1] : 300;
+          
+          nodes.push({
+            id: `region-${state.i}`,
+            type: 'environment',
+            position: { x, y },
+            data: {
+              label: state.name,
+              description: `A ${state.type || 'realm'} with ${state.burgs || 0} settlements`,
+              climate: 'Various'
+            }
+          });
+        });
+      }
+      
+      return {
+        nodes,
+        edges,
+        metadata: {
+          name: map.info ? map.info.name : 'Fantasy Map',
+          description: 'Generated with Azgaar\'s Fantasy Map Generator',
+          timestamp: new Date().toISOString()
+        }
+      };
+    }
+  </script>
+</body>
+</html>
