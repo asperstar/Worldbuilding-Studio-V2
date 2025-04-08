@@ -213,7 +213,7 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing }) {
             <div className="file-input-wrapper">
               <label htmlFor="environment-image-upload" className="file-select-btn">
                 {isUploading ? 'Uploading...' : 'Choose File'}
-                onChange={handleChange}
+                
               </label>
               <span className="file-name">
                 {fileInputRef.current?.files?.[0]?.name || "No file chosen"}
@@ -227,7 +227,7 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing }) {
               className="generate-button"
               onClick={generatePlaceholderImage}
               disabled={isUploading}
-              onChange={handleChange}
+              
             >
               Generate Simple Image
             </button>
@@ -237,7 +237,7 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing }) {
               className="generate-ai-button"
               onClick={() => alert("AI Image generation coming soon!")}
               disabled={true}
-              onChange={handleChange}
+              
             >
               AI Image (Coming Soon)
             </button>
@@ -331,7 +331,7 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing }) {
           type="submit" 
           className="submit-button"
           disabled={isUploading}
-          onChange={handleChange}
+    
         >
           {isEditing ? 'Update Environment' : 'Save Environment'}
         </button>
