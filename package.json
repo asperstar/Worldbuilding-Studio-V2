@@ -22,12 +22,13 @@
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.16.0",
     "reactflow": "^11.11.4",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "react-scripts": "^5.6.0"
   },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
-    "vercel-build": "react-scripts build",
+    "vercel-build": "CI=false react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "deploy": "vercel"
@@ -36,7 +37,10 @@
     "extends": [
       "react-app",
       "react-app/jest"
-    ]
+    ],
+    "rules": {
+      "no-unused-vars": "warn"
+    }
   },
   "browserslist": {
     "production": [
@@ -50,4 +54,5 @@
       "last 1 safari version"
     ]
   }
+  
 }

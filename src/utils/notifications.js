@@ -1,6 +1,6 @@
 // src/utils/notifications.js
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
-import { app } from './firebase';
+import { app } from '../firebase';
 
 export const messaging = getMessaging(app);
 

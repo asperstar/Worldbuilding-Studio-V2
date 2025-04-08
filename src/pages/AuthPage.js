@@ -16,40 +16,23 @@ function AuthPage() {
   const navigate = useNavigate();
   const auth = getAuth();
   
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    
-    try {
-      if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
-      } else {
-        await createUserWithEmailAndPassword(auth, email, password);
-      }
-      navigate('/worlds');
-    } catch (error) {
-      // More specific error handling
-      switch (error.code) {
-        case 'auth/weak-password':
-          setError('Password is too weak. Please use a stronger password.');
-          break;
-        case 'auth/email-already-in-use':
-          setError('Email is already in use. Please use a different email.');
-          break;
-        case 'auth/invalid-email':
-          setError('Invalid email address format.');
-          break;
-        case 'auth/user-not-found':
-          setError('No user found with this email.');
-          break;
-        case 'auth/wrong-password':
-          setError('Incorrect password. Please try again.');
-          break;
-        default:
-          setError(error.message || 'Authentication failed. Please try again.');
-      }
+  // In AuthPage.js
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setError('');
+  
+  try {
+    if (isLogin) {
+      await signInWithEmailAndPassword(auth, email, password);
+    } else {
+      await createUserWithEmailAndPassword(auth, email, password);
     }
-  };
+    navigate('/worlds');
+  } catch (error) {
+    console.error("Auth error:", error);
+    setError(error.message || "Authentication failed");
+  }
+};
   
   return (
     <div className="auth-page">

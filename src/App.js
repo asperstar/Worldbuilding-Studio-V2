@@ -28,6 +28,7 @@ import AuthPage from './pages/AuthPage';
 import ProfilePage from './pages/ProfilePage';
 import DocumentationPage from './pages/DocumentationPage';
 import DebugPage from './pages/DebugPage';
+import DebugEnv from './DebugEnv';
 
 // Navigation component
 function Navigation() {
@@ -51,27 +52,29 @@ function Navigation() {
   );
 }
 
+
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  
+ 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setLoading(false);
     });
-    
+   
     return () => unsubscribe();
   }, []);
-  
+ 
   if (loading) {
     return <div>Loading...</div>;
   }
-  
+ 
   return (
     <StorageProvider>
       <HashRouter>
         <div className="app">
+        <DebugEnv />
           {user ? (
             <>
               <DecorativeElements />
@@ -108,6 +111,7 @@ function App() {
     </StorageProvider>
   );
 }
+
 
 // Add to your index.js or main App.js file
 if (typeof window !== 'undefined') {

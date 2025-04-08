@@ -22,22 +22,32 @@ function CampaignsPage() {
   
   // Load data on mount
   useEffect(() => {
-    // Load world
-    const worlds = loadWorlds();
-    const parsedWorldId = parseInt(worldId);
-    const foundWorld = worlds.find(w => w.id === parsedWorldId);
-    setWorld(foundWorld);
-    
-    // Load campaigns
-    if (foundWorld) {
-      const worldCampaigns = loadWorldCampaigns(foundWorld.id);
-      setCampaigns(worldCampaigns);
-    }
-    
-    // Load characters
-    setCharacters(loadCharacters());
-    
-    console.log("CampaignsPage loaded with worldId:", parsedWorldId, "found world:", foundWorld);
+    const loadData = async () => {
+      try {
+        // Load world
+        const worlds = await loadWorlds(); // Use await here
+        const parsedWorldId = parseInt(worldId);
+        const foundWorld = worlds.find(w => w.id === parsedWorldId);
+        setWorld(foundWorld);
+        
+        // Load campaigns
+        if (foundWorld) {
+          const worldCampaigns = await loadWorldCampaigns(foundWorld.id); // Use await and use the loaded function
+          setCampaigns(worldCampaigns || []);
+        }
+        
+        // Load characters
+        const loadedCharacters = await loadCharacters(); // Use await and add error checking
+        setCharacters(loadedCharacters || []);
+        
+        console.log("CampaignsPage loaded with worldId:", parsedWorldId, "found world:", foundWorld);
+      } catch (error) {
+        console.error('Error loading data:', error);
+        // Optionally set an error state to show to the user
+      }
+    };
+  
+    loadData();
   }, [worldId]);
 
   const handleInputChange = (e) => {

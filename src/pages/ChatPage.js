@@ -98,11 +98,23 @@ function ChatPage() {
   const testApiConnection = async () => {
     let claudeStatus = 'Disconnected';
     let claudeError = null;
-
+  
     try {
       console.log('Testing Claude API connection...');
       
-      const response = await fetch(`${API_URL}/test`);
+      const response = await fetch(`${API_URL}/test`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+  
+      console.log('Full response:', {
+        status: response.status,
+        headers: Object.fromEntries(response.headers),
+        ok: response.ok
+      });
+      
       const data = await response.json();
       
       if (data.message === 'Server is running!') {
@@ -110,10 +122,15 @@ function ChatPage() {
         console.log('Local server connected successfully');
       } else {
         claudeError = 'Unexpected response from server';
+        console.warn('Unexpected server response:', data);
       }
     } catch (error) {
       claudeError = `Error connecting to local server: ${error.message}`;
-      console.error('API test error:', error);
+      console.error('Detailed API connection error:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack
+      });
     }
     
     setMessages(prev => [...prev, {

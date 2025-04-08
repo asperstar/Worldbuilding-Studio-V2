@@ -3,9 +3,8 @@ import CharacterForm from '../components/characters/CharacterForm';
 import { testStorage } from '../utils/storage';
 import { Link } from 'react-router-dom';
 import { useStorage } from '../contexts/StorageContext';
-import { perf } from '../utils/firebase';
-import { trace } from 'firebase/performance';
-
+import { trace } from 'firebase/performance'
+import { perf } from '../firebase';
 function CharactersPage() {
   const [characters, setCharacters] = useState([]);
   const [editingCharacter, setEditingCharacter] = useState(null);

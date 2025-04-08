@@ -1,10 +1,22 @@
-// src/utils/firebaseStorage.js
-import { db, storage, auth } from './firebase';
 import { 
-  doc, collection, getDoc, setDoc, updateDoc, deleteDoc, 
-  query, where, getDocs, writeBatch
-} from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+  db, 
+  auth, 
+  storage, 
+  collection, 
+  doc, 
+  getDoc, 
+  getDocs, 
+  setDoc, 
+  updateDoc, 
+  deleteDoc, 
+  query, 
+  where, 
+  writeBatch,
+  ref,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject 
+} from '../firebase';
 
 
 // Get the current user ID
@@ -125,21 +137,41 @@ export const updateUserProfile = async (profileData) => {
 /**
  * Character Storage Functions
  */
-export const loadCharacters = async () => {
+export const loadCharacter = async (characterId) => {
   try {
     const userId = validateUser();
-    const characters = [];
-    const q = query(collection(db, 'characters'), where('userId', '==', userId));
-    const querySnapshot = await getDocs(q);
     
-    querySnapshot.forEach((doc) => {
-      characters.push({ id: doc.id, ...doc.data() });
-    });
+    // Ensure characterId is a string and trim any whitespace
+    const cleanedId = String(characterId).trim();
     
-    return characters;
+    // Check if the ID is valid
+    if (!cleanedId) {
+      throw new Error('Invalid character ID');
+    }
+    
+    const characterRef = doc(db, 'characters', cleanedId);
+    const characterDoc = await getDoc(characterRef);
+    
+    if (!characterDoc.exists()) {
+      // Log additional context for debugging
+      console.warn(`Character not found: ID ${cleanedId}, User: ${userId}`);
+      return null;
+    }
+
+    const characterData = characterDoc.data();
+    
+    // Additional security check
+    if (characterData.userId !== userId) {
+      throw new Error('Unauthorized: Can only access own characters');
+    }
+    
+    return {
+      id: characterDoc.id,
+      ...characterData
+    };
   } catch (error) {
-    console.error('Error loading characters:', error);
-    return [];
+    console.error('Error loading character:', error);
+    return null;
   }
 };
 

@@ -1,7 +1,7 @@
 // src/utils/visionAPI.js
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { auth } from './firebase';
+import { auth } from '../firebase';
 
 export const analyzeImage = async (file) => {
   try {

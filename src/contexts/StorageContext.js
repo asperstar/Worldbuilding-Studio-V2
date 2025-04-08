@@ -6,11 +6,12 @@ import {
   signUp, 
   logOut, 
   onAuthStateChanged 
-} from '../utils/firebase';
+} from '../firebase';
+
 import { 
   loadCharacters, 
   saveCharacter,
-  saveCharacters, 
+  saveCharacters,
   deleteCharacter,
   loadEnvironments,
   saveEnvironments,
@@ -22,7 +23,7 @@ import {
   loadCampaign,
   saveCampaign,
   loadWorldCampaigns
-} from '../utils/storage';
+} from '../utils/storageExports';
 
 const StorageContext = createContext();
 
