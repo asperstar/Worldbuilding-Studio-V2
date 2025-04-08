@@ -78,7 +78,7 @@ async function testOllamaConnection() {
   return results;
 }
 
-const API_URL = 'http://localhost:3002';
+const API_URL = process.env.REACT_APP_API_URL;
 
 function ChatPage() {
   const [characters, setCharacters] = useState([]);
