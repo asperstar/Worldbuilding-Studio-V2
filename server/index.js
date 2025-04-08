@@ -8,9 +8,10 @@ const port = process.env.PORT || 3002;
 
 // Middleware
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGIN || '*',
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type', 'Accept']
+  origin: ['http://localhost:3000', 'https://worldbuilding-app-plum.vercel.app'],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
+  credentials: true
 }));
 
 // Increase the limit but not too much
@@ -169,6 +170,7 @@ app.post('/chat', async (req, res) => {
     });
   }
 });
+
 
 // Start server
 app.listen(port, () => {

@@ -12,6 +12,14 @@ import { processConversation, getCharacterMemories } from '../utils/memory/memor
 import { enhanceCharacterAPI, getCharacterById } from '../utils/character/contextProcessor';
 import { analyzeImage } from '../utils/visionAPI';
 
+
+// At the top of your ChatPage.js, add these diagnostic logs
+console.log("Environment variables:", {
+  REACT_APP_API_URL: process.env.REACT_APP_API_URL,
+  NODE_ENV: process.env.NODE_ENV
+});
+
+
 // Add diagnostic function
 async function testOllamaConnection() {
   const tests = [
@@ -77,8 +85,11 @@ async function testOllamaConnection() {
 
   return results;
 }
+// In your ChatPage.js
+const API_URL = process.env.NODE_ENV === 'production' 
+  ? "https://your-production-api-url.com" 
+  : "http://localhost:3002";
 
-const API_URL = process.env.REACT_APP_API_URL;
 
 function ChatPage() {
   const [characters, setCharacters] = useState([]);
