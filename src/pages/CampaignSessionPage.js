@@ -7,6 +7,9 @@ import { orchestrateCharacterInteraction } from '../utils/campaignManager';
 import { getCachedEnvironment } from '../utils/environment-selector';
 import { enhanceCharacterAPI } from '../utils/character/contextProcessor';
 
+const API_URL = process.env.NODE_ENV === 'production'
+  ? process.env.REACT_APP_API_URL || 'https://my-backend-jet-two.vercel.app'
+  : 'http://localhost:3002';
 
 function CampaignSessionPage() {
   const { campaignId } = useParams();
@@ -60,7 +63,7 @@ function CampaignSessionPage() {
       );
       
       // Call the AI API for scene suggestions
-      const response = await fetch('/api/claude-api', {
+      const response = await fetch(`${API_URL}/api/claude-api`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -88,7 +91,6 @@ function CampaignSessionPage() {
             gmCharacter: gmMode === 'ai' 
               ? characters.find(c => c.id === selectedGmCharacter)?.name 
               : null,
-            // Add world details
             worldName: worldDetails?.name || '',
             worldDescription: worldDetails?.description || ''
           }
@@ -356,7 +358,7 @@ function CampaignSessionPage() {
       }).join('\n');
       
       // Call the AI API for a GM narrative prompt
-      const response = await fetch('/api/claude-api', {
+      const response = await fetch(`${API_URL}/api/claude-api`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -368,8 +370,8 @@ function CampaignSessionPage() {
           relevantMemories: gmMemories,
           campaignContext: {
             isGmNarrativePrompt: true,
-            roleType: "gamemaster", // Clearly indicate role
-            speakingAs: "narrator", // Not as the character
+            roleType: "gamemaster",
+            speakingAs: "narrator",
             narratorVoice: true,
             campaignName: campaign.name,
             currentSceneTitle: currentScene?.title || "Current Scene",
@@ -503,7 +505,7 @@ const processCharacterResponse = async (character, messageHistory) => {
     
     // Call API with enhanced context
     const data = await enhanceCharacterAPI(
-      '/api/claude-api',
+      '${API_URL}/api/claude-api',
       character.id,
       messageHistory[messageHistory.length - 1].content,
       messageHistory.slice(-5),
