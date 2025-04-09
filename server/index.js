@@ -8,7 +8,7 @@ const port = process.env.PORT || 3002;
 //redeploy again 2025-04-08
 
 const cors = require('cors');
-console.log('Firebase config:', firebaseConfig);
+
 const corsOptions = {
   origin: (origin, callback) => {
     const allowedOrigins = [
@@ -16,14 +16,11 @@ const corsOptions = {
       'https://worldbuilding-bbluwxi-zoe-leonhardt-projects.vercel.app',
       /\.vercel\.app$/,
     ];
-    console.log('CORS origin check:', { origin, allowedOrigins });
     if (!origin || allowedOrigins.some(allowed => 
       typeof allowed === 'string' ? allowed === origin : allowed.test(origin)
     )) {
-      console.log('CORS allowed for origin:', origin);
       callback(null, true);
     } else {
-      console.log('CORS rejected for origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
