@@ -7,24 +7,23 @@ const port = process.env.PORT || 3002;
 const cors = require('cors');
 
 const corsOptions = {
+  origin: (origin, callback) => {
+    const allowedOrigins = [
+      'http://localhost:3000', // Frontend dev server
+      'https://worldbuilding-bbluwxi-zoe-leonhardt-projects.vercel.app', // Current frontend production URL
+      /\.vercel\.app$/, // Allow all Vercel subdomains (for future deployments)
+    ];
+    if (!origin || allowedOrigins.some(allowed => 
+      typeof allowed === 'string' ? allowed === origin : allowed.test(origin)
+    )) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
   credentials: true,
-  origin: (origin, callback) => {
-    // Allow requests with no origin (e.g., same-origin requests, Postman, curl)
-    if (!origin) return callback(null, true);
-
-    // Allow localhost for development
-    if (origin === 'http://localhost:3000') return callback(null, true);
-
-    // Allow any Vercel domain (e.g., *.vercel.app)
-    if (origin.endsWith('.vercel.app')) {
-      return callback(null, true);
-    }
-
-    // Reject all other origins
-    return callback(new Error('Not allowed by CORS'));
-  }
 };
 
 app.use(cors(corsOptions));
