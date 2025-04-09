@@ -1,9 +1,11 @@
 // src/pages/CampaignSessionPage.js
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { loadCampaign, saveCampaign, loadCharacters, loadWorlds } from '../utils/storage';
 import { getCampaignMemories, addCampaignMemory } from '../utils/memory/campaignMemoryManager';
 import { orchestrateCharacterInteraction } from '../utils/campaignManager';
+import { addCharacterMemory } from '../utils/memory/memoryManager';
 import { getCachedEnvironment } from '../utils/environment-selector';
 
 // Define API_URL using the environment variable
