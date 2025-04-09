@@ -1,0 +1,55 @@
+/* src/components/maps/AzgaarMapIframe.css */
+.azgaar-map-iframe {
+    padding: 20px;
+    background-color: #1a1a1a;
+    color: #fff;
+  }
+  
+  .generator-header {
+    margin-bottom: 20px;
+  }
+  
+  .status-message {
+    color: #a6cee3;
+    font-style: italic;
+  }
+  
+  .generator-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  
+  .control-button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+  }
+  
+  .generate-button {
+    background-color: #F26430;
+    color: #fff;
+  }
+  
+  .export-button {
+    background-color: #a6cee3;
+    color: #000;
+  }
+  
+  .azgaar-iframe-container {
+    width: 100%;
+    border: 1px solid #444;
+    border-radius: 5px;
+    overflow: hidden;
+  }
+  
+  .map-preview {
+    margin-top: 20px;
+  }
+  
+  .preview-image {
+    max-width: 100%;
+    border-radius: 5px;
+  }

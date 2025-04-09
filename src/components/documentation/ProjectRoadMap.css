@@ -1,0 +1,228 @@
+/* src/components/documentation/ProjectRoadmap.css */
+.project-roadmap {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    color: var(--white);
+    background-color: var(--dark-bg);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .project-roadmap h2 {
+    color: var(--teal);
+    border-bottom: 2px solid var(--teal);
+    padding-bottom: 10px;
+    margin-bottom: 25px;
+  }
+  
+  .roadmap-introduction {
+    margin-bottom: 30px;
+  }
+  
+  .roadmap-introduction p {
+    font-size: 18px;
+    line-height: 1.6;
+    color: var(--beige);
+  }
+  
+  .roadmap-timeline {
+    position: relative;
+    margin: 40px 0;
+    padding-left: 30px;
+  }
+  
+  .roadmap-timeline::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 8px;
+    width: 4px;
+    background: linear-gradient(to bottom, var(--teal), var(--purple), var(--orange));
+    border-radius: 4px;
+  }
+  
+  .timeline-item {
+    position: relative;
+    margin-bottom: 50px;
+  }
+  
+  .timeline-marker {
+    position: absolute;
+    left: -30px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background-color: var(--dark-bg);
+    border: 4px solid var(--teal);
+    z-index: 1;
+  }
+  
+  .timeline-item:nth-child(2) .timeline-marker {
+    border-color: var(--purple);
+  }
+  
+  .timeline-item:nth-child(3) .timeline-marker {
+    border-color: var(--pink);
+  }
+  
+  .timeline-item:nth-child(4) .timeline-marker {
+    border-color: var(--orange);
+  }
+  
+  .timeline-content {
+    padding: 20px;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .timeline-content h3 {
+    color: var(--white);
+    margin-top: 0;
+    margin-bottom: 15px;
+    position: relative;
+    padding-bottom: 10px;
+  }
+  
+  .timeline-content h3::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 50px;
+    height: 3px;
+    background-color: var(--teal);
+  }
+  
+  .timeline-item:nth-child(2) .timeline-content h3::after {
+    background-color: var(--purple);
+  }
+  
+  .timeline-item:nth-child(3) .timeline-content h3::after {
+    background-color: var(--pink);
+  }
+  
+  .timeline-item:nth-child(4) .timeline-content h3::after {
+    background-color: var(--orange);
+  }
+  
+  .timeline-content ul {
+    padding-left: 20px;
+  }
+  
+  .timeline-content li {
+    margin-bottom: 12px;
+    line-height: 1.5;
+    color: var(--beige);
+  }
+  
+  .current.timeline-item .timeline-content {
+    border: 1px solid var(--teal);
+    box-shadow: 0 0 10px rgba(80, 200, 186, 0.2);
+  }
+  
+  .current-challenges {
+    margin-top: 40px;
+    padding: 20px;
+    background-color: rgba(255, 93, 115, 0.1);
+    border: 1px solid rgba(255, 93, 115, 0.3);
+    border-radius: 8px;
+  }
+  
+  .current-challenges h3 {
+    color: var(--pink);
+    margin-top: 0;
+    position: relative;
+    padding-bottom: 10px;
+  }
+  
+  .current-challenges h3::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 50px;
+    height: 3px;
+    background-color: var(--pink);
+  }
+  
+  .current-challenges ul {
+    padding-left: 20px;
+  }
+  
+  .current-challenges li {
+    margin-bottom: 10px;
+    color: var(--beige);
+  }
+  
+  .worlds-vs-environments {
+    margin-top: 40px;
+    padding: 20px;
+    background-color: rgba(138, 86, 232, 0.1);
+    border: 1px solid rgba(138, 86, 232, 0.3);
+    border-radius: 8px;
+  }
+  
+  .worlds-vs-environments h3 {
+    color: var(--purple);
+    margin-top: 0;
+    position: relative;
+    padding-bottom: 10px;
+  }
+  
+  .worlds-vs-environments h3::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 50px;
+    height: 3px;
+    background-color: var(--purple);
+  }
+  
+  .worlds-vs-environments p {
+    margin-bottom: 15px;
+    color: var(--beige);
+    line-height: 1.6;
+  }
+  
+  .worlds-vs-environments strong {
+    color: var(--white);
+  }
+  
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .project-roadmap {
+      padding: 15px;
+    }
+    
+    .roadmap-introduction p {
+      font-size: 16px;
+    }
+    
+    .timeline-content {
+      padding: 15px;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .roadmap-timeline {
+      padding-left: 20px;
+    }
+    
+    .roadmap-timeline::before {
+      left: 5px;
+    }
+    
+    .timeline-marker {
+      left: -20px;
+      width: 15px;
+      height: 15px;
+    }
+    
+    .timeline-content li {
+      font-size: 14px;
+    }
+  }

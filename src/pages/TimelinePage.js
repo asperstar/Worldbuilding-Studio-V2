@@ -1,548 +1,688 @@
+// src/pages/TimelinePage.js
 import React, { useState, useEffect } from 'react';
-import { loadCharacters, loadEnvironments, saveTimelineData, loadTimelineData, loadWorlds } from '../utils/storage';
+import { db } from '../firebase';
+import { collection, getDocs, setDoc, doc, addDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { useAuth } from '../contexts/AuthContext';
+import './TimelinePage.css'; 
 
 function TimelinePage() {
+  const { currentUser } = useAuth();
+  const [worlds, setWorlds] = useState([]);
+  const [selectedWorld, setSelectedWorld] = useState(null);
+  const [timelines, setTimelines] = useState([]);
+  const [selectedTimeline, setSelectedTimeline] = useState(null);
+  const [periods, setPeriods] = useState([]);
   const [events, setEvents] = useState([]);
   const [characters, setCharacters] = useState([]);
   const [environments, setEnvironments] = useState([]);
+  const [newPeriod, setNewPeriod] = useState({
+    title: '',
+    description: '',
+    startDate: '',
+    endDate: '',
+    tone: 'light'
+  });
   const [newEvent, setNewEvent] = useState({
+    periodId: '',
     title: '',
     description: '',
     date: '',
-    sequence: '',
     characterIds: [],
     environmentId: '',
     color: '#3498db',
     worldId: ''
   });
-  const [sequences, setSequences] = useState(['Main Timeline']);
-  const [editingEvent, setEditingEvent] = useState(null);
-  const [newSequence, setNewSequence] = useState('');
-  const [activeView, setActiveView] = useState('visual'); // 'visual' or 'list'
-  const [availableWorlds, setAvailableWorlds] = useState([]);
-  
-  // Load all data on mount
+  const [newCollision, setNewCollision] = useState({
+    sourceTimelineId: '',
+    sourceEventId: '',
+    targetTimelineId: '',
+    targetPeriodId: '',
+    description: ''
+  });
+  const [collisions, setCollisions] = useState([]);
+  const [newTimelineName, setNewTimelineName] = useState('');
+  const [activeView, setActiveView] = useState('visual');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   useEffect(() => {
-    // Load worlds data
-    const worlds = loadWorlds();
-    setAvailableWorlds(worlds);
-    
-    // Load characters and environments
-    setCharacters(loadCharacters());
-    setEnvironments(loadEnvironments());
-    
-    // Load timeline data
-    const timelineData = loadTimelineData();
-    if (timelineData) {
-      setEvents(timelineData.events || []);
-      setSequences(timelineData.sequences || ['Main Timeline']);
+    const fetchData = async () => {
+      if (!currentUser) {
+        setError('Please log in to access timelines.');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+
+        // Load worlds
+        const worldsCollection = collection(db, 'worlds');
+        const worldsSnapshot = await getDocs(worldsCollection);
+        const worldsList = worldsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) || [];
+        setWorlds(worldsList);
+        if (worldsList.length > 0) {
+          setSelectedWorld(worldsList[0]);
+        }
+
+        // Load characters
+        const charactersCollection = collection(db, 'characters');
+        const charactersSnapshot = await getDocs(charactersCollection);
+        const charactersList = charactersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) || [];
+        setCharacters(charactersList);
+
+        // Load environments
+        const environmentsCollection = collection(db, 'environments');
+        const environmentsSnapshot = await getDocs(environmentsCollection);
+        const environmentsList = environmentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) || [];
+        setEnvironments(environmentsList);
+
+        // Load collisions
+        const collisionsCollection = collection(db, 'collisions');
+        const collisionsSnapshot = await getDocs(collisionsCollection);
+        const collisionsList = collisionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) || [];
+        setCollisions(collisionsList);
+      } catch (err) {
+        console.error('Error fetching data:', err);
+        setError('Failed to load data. Please try again later.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [currentUser]);
+
+  useEffect(() => {
+    const fetchTimelinesAndPeriods = async () => {
+      if (!selectedWorld) return;
+  
+      try {
+        setLoading(true);
+  
+        // Query timelines for the selected world and current user
+        const timelineCollection = collection(db, 'timelines');
+        const timelineQuery = query(
+          timelineCollection,
+          where('worldId', '==', selectedWorld.id),
+          where('userId', '==', currentUser.uid)
+        );
+        const timelineSnapshot = await getDocs(timelineQuery);
+        const worldTimelines = timelineSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) || [];
+        setTimelines(worldTimelines);
+  
+        if (worldTimelines.length > 0) {
+          setSelectedTimeline(worldTimelines[0]);
+  
+          // Query periods for the selected timeline
+          const periodsCollection = collection(db, 'periods');
+          const periodsQuery = query(
+            periodsCollection,
+            where('timelineId', '==', worldTimelines[0].id)
+          );
+          const periodsSnapshot = await getDocs(periodsQuery);
+          const timelinePeriods = periodsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) || [];
+          setPeriods(timelinePeriods);
+  
+          // Query events for the selected timeline
+          const eventsCollection = collection(db, 'events');
+          const eventsQuery = query(
+            eventsCollection,
+            where('timelineId', '==', worldTimelines[0].id)
+          );
+          const eventsSnapshot = await getDocs(eventsQuery);
+          const timelineEvents = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) || [];
+          setEvents(timelineEvents);
+        } else {
+          setPeriods([]);
+          setEvents([]);
+        }
+      } catch (err) {
+        console.error('Error fetching timelines and periods:', err);
+        setError('Failed to load timelines and periods.');
+      } finally {
+        setLoading(false);
+      }
+    };
+  
+    fetchTimelinesAndPeriods();
+  }, [selectedWorld, currentUser]);
+
+  const createTimeline = async () => {
+    if (!newTimelineName.trim()) {
+      alert('Please enter a timeline name.');
+      return;
     }
-  }, []);
+
+    try {
+      const newTimeline = {
+        name: newTimelineName.trim(),
+        userId: currentUser.uid,
+        worldId: selectedWorld.id,
+        createdAt: new Date().toISOString()
+      };
+      const timelineRef = await addDoc(collection(db, 'timelines'), newTimeline);
+      const createdTimeline = { ...newTimeline, id: timelineRef.id };
+      setTimelines([...timelines, createdTimeline]);
+      setSelectedTimeline(createdTimeline);
+      setPeriods([]);
+      setEvents([]);
+      setNewTimelineName('');
+    } catch (err) {
+      console.error('Error creating timeline:', err);
+      setError('Failed to create timeline.');
+    }
+  };
+
+  const deleteTimeline = async (timelineId) => {
+    try {
+      await deleteDoc(doc(db, 'timelines', timelineId));
+      setTimelines(timelines.filter(timeline => timeline.id !== timelineId));
+      if (selectedTimeline?.id === timelineId) {
+        setSelectedTimeline(timelines[0] || null);
+        setPeriods([]);
+        setEvents([]);
+      }
+    } catch (err) {
+      console.error('Error deleting timeline:', err);
+      setError('Failed to delete timeline.');
+    }
+  };
+
+  const switchTimeline = async (timeline) => {
+    setSelectedTimeline(timeline);
   
-  // Save timeline data when it changes
-  useEffect(() => {
-    saveTimelineData({
-      events,
-      sequences
-    });
-  }, [events, sequences]);
+    try {
+      // Query periods for the selected timeline
+      const periodsCollection = collection(db, 'periods');
+      const periodsQuery = query(
+        periodsCollection,
+        where('timelineId', '==', timeline.id)
+      );
+      const periodsSnapshot = await getDocs(periodsQuery);
+      const timelinePeriods = periodsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) || [];
+      setPeriods(timelinePeriods);
   
-  // Handle form field changes
+      // Query events for the selected timeline
+      const eventsCollection = collection(db, 'events');
+      const eventsQuery = query(
+        eventsCollection,
+        where('timelineId', '==', timeline.id)
+      );
+      const eventsSnapshot = await getDocs(eventsQuery);
+      const timelineEvents = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) || [];
+      setEvents(timelineEvents);
+    } catch (err) {
+      console.error('Error switching timeline:', err);
+      setError('Failed to load periods and events for the selected timeline.');
+    }
+  };
+
+  const addPeriod = async () => {
+    if (!newPeriod.title.trim()) {
+      alert('Please enter a period title.');
+      return;
+    }
+
+    try {
+      const periodData = {
+        ...newPeriod,
+        timelineId: selectedTimeline.id,
+        createdAt: new Date().toISOString()
+      };
+      const periodRef = await addDoc(collection(db, 'periods'), periodData);
+      setPeriods([...periods, { ...periodData, id: periodRef.id }]);
+      setNewPeriod({
+        title: '',
+        description: '',
+        startDate: '',
+        endDate: '',
+        tone: 'light'
+      });
+    } catch (err) {
+      console.error('Error adding period:', err);
+      setError('Failed to add period.');
+    }
+  };
+
+  const deletePeriod = async (periodId) => {
+    try {
+      await deleteDoc(doc(db, 'periods', periodId));
+      setPeriods(periods.filter(period => period.id !== periodId));
+      setEvents(events.filter(event => event.periodId !== periodId));
+    } catch (err) {
+      console.error('Error deleting period:', err);
+      setError('Failed to delete period.');
+    }
+  };
+
+  const addEvent = async () => {
+    if (!newEvent.title || !newEvent.date || !newEvent.periodId) {
+      alert('Please fill in all required event fields.');
+      return;
+    }
+
+    try {
+      const eventData = {
+        ...newEvent,
+        timelineId: selectedTimeline.id,
+        worldId: selectedWorld.id,
+        createdAt: new Date().toISOString()
+      };
+      const eventRef = await addDoc(collection(db, 'events'), eventData);
+      setEvents([...events, { ...eventData, id: eventRef.id }]);
+      setNewEvent({
+        periodId: '',
+        title: '',
+        description: '',
+        date: '',
+        characterIds: [],
+        environmentId: '',
+        color: '#3498db',
+        worldId: ''
+      });
+    } catch (err) {
+      console.error('Error adding event:', err);
+      setError('Failed to add event.');
+    }
+  };
+
+  const deleteEvent = async (eventId) => {
+    try {
+      await deleteDoc(doc(db, 'events', eventId));
+      setEvents(events.filter(event => event.id !== eventId));
+    } catch (err) {
+      console.error('Error deleting event:', err);
+      setError('Failed to delete event.');
+    }
+  };
+
+  const addCollision = async () => {
+    if (!newCollision.sourceTimelineId || !newCollision.sourceEventId || !newCollision.targetTimelineId || !newCollision.targetPeriodId) {
+      alert('Please fill in all collision fields.');
+      return;
+    }
+
+    try {
+      const collisionData = {
+        ...newCollision,
+        createdAt: new Date().toISOString()
+      };
+      const collisionRef = await addDoc(collection(db, 'collisions'), collisionData);
+      setCollisions([...collisions, { ...collisionData, id: collisionRef.id }]);
+      setNewCollision({
+        sourceTimelineId: '',
+        sourceEventId: '',
+        targetTimelineId: '',
+        targetPeriodId: '',
+        description: ''
+      });
+    } catch (err) {
+      console.error('Error adding collision:', err);
+      setError('Failed to add collision.');
+    }
+  };
+
   const handleEventChange = (e) => {
     const { name, value } = e.target;
-    setNewEvent({
-      ...newEvent,
-      [name]: value
-    });
+    setNewEvent({ ...newEvent, [name]: value });
   };
-  
-  // Handle character selection checkboxes
+
   const handleCharacterChange = (e) => {
     const characterId = e.target.value;
     const isChecked = e.target.checked;
-    
-    setNewEvent(prev => {
-      if (isChecked) {
-        return {
-          ...prev,
-          characterIds: [...prev.characterIds, characterId]
-        };
-      } else {
-        return {
-          ...prev,
-          characterIds: prev.characterIds.filter(id => id !== characterId)
-        };
-      }
-    });
+    setNewEvent(prev => ({
+      ...prev,
+      characterIds: isChecked
+        ? [...prev.characterIds, characterId]
+        : prev.characterIds.filter(id => id !== characterId)
+    }));
   };
-  
-  // Start editing an existing event
-  const startEditing = (event) => {
-    setEditingEvent(event);
-    setNewEvent({
-      ...event,
-      // Make sure characterIds is always an array
-      characterIds: event.characterIds || []
-    });
-    
-    // Scroll to the form
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  const handlePeriodChange = (e) => {
+    const { name, value } = e.target;
+    setNewPeriod({ ...newPeriod, [name]: value });
   };
-  
-  // Add a new timeline sequence
-  const addSequence = () => {
-    if (newSequence.trim() && !sequences.includes(newSequence.trim())) {
-      setSequences([...sequences, newSequence.trim()]);
-      setNewSequence('');
-    }
+
+  const handleCollisionChange = (e) => {
+    const { name, value } = e.target;
+    setNewCollision({ ...newCollision, [name]: value });
   };
-  
-  // Save a new event or update an existing one
-  const saveEvent = () => {
-    // Validate required fields
-    if (!newEvent.title) {
-      alert("Please enter an event title");
-      return;
-    }
-    
-    if (!newEvent.date) {
-      alert("Please enter a date for this event");
-      return;
-    }
-    
-    if (!newEvent.sequence) {
-      alert("Please select a timeline sequence");
-      return;
-    }
-    
-    if (editingEvent) {
-      // Update existing event
-      const updatedEvents = events.map(event => 
-        event.id === editingEvent.id 
-          ? { ...newEvent, id: event.id }
-          : event
-      );
-      setEvents(updatedEvents);
-      
-      // Save to storage
-      saveTimelineData({
-        events: updatedEvents,
-        sequences
-      });
-      
-      setEditingEvent(null);
-    } else {
-      // Add new event with unique ID
-      const newEventWithId = { 
-        ...newEvent, 
-        id: Date.now().toString()
-      };
-      
-      const updatedEvents = [...events, newEventWithId];
-      setEvents(updatedEvents);
-      
-      // Save to storage
-      saveTimelineData({
-        events: updatedEvents,
-        sequences
-      });
-    }
-    
-    // Reset form
-    setNewEvent({
-      title: '',
-      description: '',
-      date: '',
-      sequence: sequences[0],
-      characterIds: [],
-      environmentId: '',
-      worldId: '', 
-      color: '#3498db'
-    });
-  };
-  
-  // Cancel editing and reset form
-  const cancelEditing = () => {
-    setEditingEvent(null);
-    setNewEvent({
-      title: '',
-      description: '',
-      date: '',
-      sequence: sequences[0],
-      characterIds: [],
-      environmentId: '',
-      worldId: '',
-      color: '#3498db'
-    });
-  };
-  
-  // Delete an event
-  const deleteEvent = (eventId) => {
-    const updatedEvents = events.filter(event => event.id !== eventId);
-    setEvents(updatedEvents);
-    
-    // Also update storage
-    saveTimelineData({
-      events: updatedEvents,
-      sequences
-    });
-  };
-  
-  // Sort events by date
-  const sortedEvents = [...events].sort((a, b) => {
-    // Parse dates as strings for sorting
-    const dateA = a.date || '';
-    const dateB = b.date || '';
-    return dateA.localeCompare(dateB);
-  });
-  
-  // Group events by sequence
-  const eventsBySequence = {};
-  sequences.forEach(sequence => {
-    eventsBySequence[sequence] = sortedEvents.filter(event => event.sequence === sequence);
-  });
-  
-  // Get unique dates for the timeline
-  const uniqueDates = Array.from(new Set(sortedEvents.map(event => event.date))).filter(Boolean);
-  
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (error) {
+    return <div style={{ color: 'red' }}>{error}</div>;
+  }
+
+  if (!currentUser) {
+    return <div>Please log in to access timelines.</div>;
+  }
+
   return (
     <div className="timeline-page">
-      <h1>Timeline</h1>
-      
-      <div className="timeline-container">
-        <div className="timeline-form-section">
-          <h2>{editingEvent ? 'Edit Event' : 'Add New Event'}</h2>
-          
-          <div className="timeline-form">
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              saveEvent();
-            }}>
-              <div className="form-group">
-                <label htmlFor="event-title">Event Title:</label>
-                <input 
-                  type="text"
-                  id="event-title"
-                  name="title"
-                  value={newEvent.title}
-                  onChange={handleEventChange}
-                  required
-                  placeholder="Battle of Emerald Plains, Royal Wedding, etc."
-                />
-              </div>
-              
-              <div className="form-row">
-                <div className="form-group">
-                  <label htmlFor="event-date">Date/Time:</label>
-                  <input 
-                    type="text"
-                    id="event-date"
-                    name="date"
-                    value={newEvent.date}
-                    onChange={handleEventChange}
-                    required
-                    placeholder="Year 1023, Day 7 of Summer, etc."
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label htmlFor="event-color">Event Color:</label>
-                  <input 
-                    type="color"
-                    id="event-color"
-                    name="color"
-                    value={newEvent.color}
-                    onChange={handleEventChange}
-                    className="color-picker"
-                  />
-                </div>
-              </div>
-              
-              <div className="form-group">
-                <label htmlFor="event-sequence">Timeline Sequence:</label>
-                <div className="sequence-selector">
-                  <select 
-                    id="event-sequence"
-                    name="sequence"
-                    value={newEvent.sequence}
-                    onChange={handleEventChange}
-                    required
-                  >
-                    <option value="">-- Select Timeline --</option>
-                    {sequences.map(seq => (
-                      <option key={seq} value={seq}>{seq}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              
-              <div className="form-group">
-                <label htmlFor="event-world">Associated World:</label>
-                <select
-                  id="event-world"
-                  name="worldId"
-                  value={newEvent.worldId || ''}
-                  onChange={handleEventChange}
-                >
-                  <option value="">-- No Associated World --</option>
-                  {availableWorlds && availableWorlds.map(world => (
-                    <option key={world.id} value={world.id}>{world.name}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div className="form-group">
-                <label htmlFor="new-sequence">Add New Timeline:</label>
-                <div className="new-sequence">
-                  <input 
-                    type="text"
-                    id="new-sequence"
-                    value={newSequence}
-                    onChange={(e) => setNewSequence(e.target.value)}
-                    placeholder="New Timeline Name"
-                  />
-                  <button 
-                    type="button" 
-                    onClick={addSequence} 
-                    className="add-sequence-button"
-                    disabled={!newSequence.trim()}
-                  >
-                    Add Timeline
-                  </button>
-                </div>
-              </div>
-              
-              <div className="form-group">
-                <label htmlFor="event-description">Description:</label>
-                <textarea
-                  id="event-description"
-                  name="description"
-                  value={newEvent.description}
-                  onChange={handleEventChange}
-                  rows="3"
-                  placeholder="What happened during this event?"
-                />
-              </div>
-              
-              <div className="form-group">
-                <label htmlFor="event-location">Location:</label>
-                <select
-                  id="event-location"
-                  name="environmentId"
-                  value={newEvent.environmentId}
-                  onChange={handleEventChange}
-                >
-                  <option value="">-- No Location --</option>
-                  {environments.map(env => (
-                    <option key={env.id} value={env.id}>{env.name}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div className="form-group characters-group">
-                <label>Characters Involved:</label>
-                <div className="characters-selector">
-                  {characters.length === 0 ? (
-                    <p>No characters available</p>
-                  ) : (
-                    <div className="character-checkboxes">
-                      {characters.map(char => (
-                        <div key={char.id} className="character-checkbox">
-                          <input
-                            type="checkbox"
-                            id={`char-${char.id}`}
-                            value={char.id}
-                            checked={newEvent.characterIds.includes(char.id)}
-                            onChange={handleCharacterChange}
-                          />
-                          <label htmlFor={`char-${char.id}`}>
-                            {char.imageUrl ? (
-                              <img 
-                                src={char.imageUrl} 
-                                alt={char.name}
-                                className="character-thumbnail"
-                              />
-                            ) : (
-                              <span className="character-initial">
-                                {char.name ? char.name[0] : '?'}
-                              </span>
-                            )}
-                            {char.name}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              <div className="form-buttons">
-                <button type="submit" className="submit-button">
-                  {editingEvent ? 'Update Event' : 'Add to Timeline'}
-                </button>
-                
-                {editingEvent && (
-                  <button type="button" className="cancel-button" onClick={cancelEditing}>
-                    Cancel
-                  </button>
-                )}
-              </div>
-            </form>
-          </div>
+      <h1>Timelines</h1>
+
+      {/* World Selector */}
+      <div className="world-selector">
+        <h2>Select World</h2>
+        <select
+          value={selectedWorld?.id || ''}
+          onChange={(e) => {
+            const world = worlds.find(w => w.id === e.target.value);
+            setSelectedWorld(world);
+          }}
+        >
+          {worlds.map(world => (
+            <option key={world.id} value={world.id}>{world.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Timeline Selector */}
+      <div className="timeline-selector">
+        <h2>Timelines in {selectedWorld?.name}</h2>
+        <div className="timeline-tabs">
+          {timelines.map(timeline => (
+            <div
+              key={timeline.id}
+              className={`timeline-tab ${selectedTimeline?.id === timeline.id ? 'active' : ''}`}
+              onClick={() => switchTimeline(timeline)}
+            >
+              {timeline.name}
+              <button onClick={() => deleteTimeline(timeline.id)} className="delete-btn">Delete</button>
+            </div>
+          ))}
         </div>
-        
-        <div className="timeline-view-section">
-          <div className="view-header">
-            <h2>Your Timeline</h2>
-            
-            <div className="view-toggle">
-              <button 
-                className={`view-button ${activeView === 'visual' ? 'active' : ''}`}
-                onClick={() => setActiveView('visual')}
-              >
-                Visual Timeline
-              </button>
-              <button 
-                className={`view-button ${activeView === 'list' ? 'active' : ''}`}
-                onClick={() => setActiveView('list')}
-              >
-                List View
-              </button>
-            </div>
+        <div className="new-timeline">
+          <input
+            type="text"
+            value={newTimelineName}
+            onChange={(e) => setNewTimelineName(e.target.value)}
+            placeholder="New Timeline Name"
+          />
+          <button onClick={createTimeline} disabled={!newTimelineName.trim()}>
+            Create Timeline
+          </button>
+        </div>
+      </div>
+
+      {/* Add Period Form */}
+      <div className="period-form-section">
+        <h2>Add Period</h2>
+        <div className="period-form">
+          <input
+            type="text"
+            name="title"
+            value={newPeriod.title}
+            onChange={handlePeriodChange}
+            placeholder="Period Title"
+          />
+          <textarea
+            name="description"
+            value={newPeriod.description}
+            onChange={handlePeriodChange}
+            placeholder="Description"
+          />
+          <input
+            type="text"
+            name="startDate"
+            value={newPeriod.startDate}
+            onChange={handlePeriodChange}
+            placeholder="Start Date"
+          />
+          <input
+            type="text"
+            name="endDate"
+            value={newPeriod.endDate}
+            onChange={handlePeriodChange}
+            placeholder="End Date"
+          />
+          <select name="tone" value={newPeriod.tone} onChange={handlePeriodChange}>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+          <button onClick={addPeriod}>Add Period</button>
+        </div>
+      </div>
+
+      {/* Add Event Form */}
+      <div className="event-form-section">
+        <h2>Add Event</h2>
+        <div className="event-form">
+          <select
+            name="periodId"
+            value={newEvent.periodId}
+            onChange={handleEventChange}
+          >
+            <option value="">Select Period</option>
+            {periods.map(period => (
+              <option key={period.id} value={period.id}>{period.title}</option>
+            ))}
+          </select>
+          <input
+            type="text"
+            name="title"
+            value={newEvent.title}
+            onChange={handleEventChange}
+            placeholder="Event Title"
+          />
+          <textarea
+            name="description"
+            value={newEvent.description}
+            onChange={handleEventChange}
+            placeholder="Description"
+          />
+          <input
+            type="text"
+            name="date"
+            value={newEvent.date}
+            onChange={handleEventChange}
+            placeholder="Date"
+          />
+          <input
+            type="color"
+            name="color"
+            value={newEvent.color}
+            onChange={handleEventChange}
+          />
+          <select
+            name="environmentId"
+            value={newEvent.environmentId}
+            onChange={handleEventChange}
+          >
+            <option value="">Select Location</option>
+            {environments.map(env => (
+              <option key={env.id} value={env.id}>{env.name}</option>
+            ))}
+          </select>
+          <div className="characters-selector">
+            {characters.map(char => (
+              <label key={char.id}>
+                <input
+                  type="checkbox"
+                  value={char.id}
+                  checked={newEvent.characterIds.includes(char.id)}
+                  onChange={handleCharacterChange}
+                />
+                {char.name}
+              </label>
+            ))}
           </div>
-          
-          {events.length === 0 ? (
-            <p className="empty-timeline">Add events to start building your timeline</p>
-          ) : activeView === 'visual' ? (
-            <div className="visual-timeline">
-              <div className="timeline-ruler">
-                {uniqueDates.map((date, index) => (
-                  <div key={date} className="date-marker" style={{ top: `${index * 160 + 80}px` }}>
-                    <div className="date-line"></div>
-                    <div className="date-label">{date}</div>
-                  </div>
-                ))}
-              </div>
-              
-              <div className="timeline-content">
-                {sequences.map((sequence, seqIndex) => (
-                  <div key={sequence} className="sequence-lane" style={{ left: `${seqIndex * 300 + 120}px` }}>
-                    <div className="sequence-title">{sequence}</div>
-                    
-                    {eventsBySequence[sequence].map((event, eventIndex) => {
-                      const dateIndex = uniqueDates.indexOf(event.date);
-                      return (
-                        <div 
-                          key={event.id} 
-                          className="timeline-event-card"
-                          style={{ 
-                            top: `${dateIndex * 160 + 50}px`,
-                            backgroundColor: event.color || '#3498db',
-                          }}
-                        >
-                          <h3>{event.title}</h3>
-                          {event.description && <p className="event-description">{event.description.substring(0, 60)}...</p>}
-                          
-                          <div className="event-meta">
-                            {event.environmentId && (
-                              <div className="event-location">
-                                📍 {environments.find(env => env.id === event.environmentId)?.name || 'Unknown'}
-                              </div>
-                            )}
-                            
-                            {event.worldId && (
-                              <div className="event-world">
-                                🌍 {availableWorlds.find(world => world.id === event.worldId)?.name || 'Unknown World'}
-                              </div>
-                            )}
-                            
-                            {event.characterIds && event.characterIds.length > 0 && (
-                              <div className="event-characters">
-                                👤 {event.characterIds.length} character{event.characterIds.length !== 1 ? 's' : ''}
-                              </div>
-                            )}
-                          </div>
-                          
-                          <div className="event-actions">
-                            <button onClick={() => startEditing(event)} className="edit-btn">Edit</button>
-                            <button onClick={() => deleteEvent(event.id)} className="delete-btn">Delete</button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="list-timeline">
-              {uniqueDates.map(date => (
-                <div key={date} className="timeline-date-group">
-                  <h3 className="date-header">{date}</h3>
-                  
-                  <div className="date-events">
-                    {sequences.map(sequence => {
-                      const sequenceEvents = eventsBySequence[sequence].filter(event => event.date === date);
-                      
-                      return sequenceEvents.length > 0 ? (
-                        <div key={sequence} className="sequence-events">
-                          <h4 className="sequence-name">{sequence}</h4>
-                          
-                          <div className="event-cards">
-                            {sequenceEvents.map(event => (
-                              <div 
-                                key={event.id} 
-                                className="timeline-event"
-                                style={{ 
-                                  borderLeftColor: event.color || '#3498db'
-                                }}
-                              >
-                                <div className="event-content">
-                                  <h3>{event.title}</h3>
-                                  
-                                  {event.description && (
-                                    <div className="event-description">{event.description}</div>
-                                  )}
-                                  
-                                  <div className="event-details">
-                                    {event.environmentId && (
-                                      <div className="event-location">
-                                        <strong>Location:</strong> {environments.find(env => env.id === event.environmentId)?.name || 'Unknown'}
-                                      </div>
-                                    )}
-                                    
-                                    {event.worldId && (
-                                      <div className="event-world">
-                                        <strong>World:</strong> {availableWorlds.find(world => world.id === event.worldId)?.name || 'Unknown World'}
-                                      </div>
-                                    )}
-                                    
-                                    {event.characterIds && event.characterIds.length > 0 && (
-                                      <div className="event-characters">
-                                        <strong>Characters:</strong> {event.characterIds.map(id => 
-                                          characters.find(char => char.id === id)?.name || 'Unknown'
-                                        ).join(', ')}
-                                      </div>
-                                    )}
-                                  </div>
-                                  
-                                  <div className="event-actions">
-                                    <button onClick={() => startEditing(event)} className="edit-button">Edit</button>
-                                    <button onClick={() => deleteEvent(event.id)} className="delete-button">Delete</button>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null;
-                    })}
-                  </div>
-                </div>
+          <button onClick={addEvent}>Add Event</button>
+        </div>
+      </div>
+
+      {/* Add Collision Form */}
+      <div className="collision-form-section">
+        <h2>Add Timeline Collision</h2>
+        <div className="collision-form">
+          <select
+            name="sourceTimelineId"
+            value={newCollision.sourceTimelineId}
+            onChange={handleCollisionChange}
+          >
+            <option value="">Source Timeline</option>
+            {timelines.map(timeline => (
+              <option key={timeline.id} value={timeline.id}>{timeline.name}</option>
+            ))}
+          </select>
+          <select
+            name="sourceEventId"
+            value={newCollision.sourceEventId}
+            onChange={handleCollisionChange}
+          >
+            <option value="">Source Event</option>
+            {events
+              .filter(event => event.timelineId === newCollision.sourceTimelineId)
+              .map(event => (
+                <option key={event.id} value={event.id}>{event.title}</option>
               ))}
-            </div>
-          )}
+          </select>
+          <select
+            name="targetTimelineId"
+            value={newCollision.targetTimelineId}
+            onChange={handleCollisionChange}
+          >
+            <option value="">Target Timeline</option>
+            {timelines.map(timeline => (
+              <option key={timeline.id} value={timeline.id}>{timeline.name}</option>
+            ))}
+          </select>
+          <select
+            name="targetPeriodId"
+            value={newCollision.targetPeriodId}
+            onChange={handleCollisionChange}
+          >
+            <option value="">Target Period</option>
+            {periods
+              .filter(period => period.timelineId === newCollision.targetTimelineId)
+              .map(period => (
+                <option key={period.id} value={period.id}>{period.title}</option>
+              ))}
+          </select>
+          <textarea
+            name="description"
+            value={newCollision.description}
+            onChange={handleCollisionChange}
+            placeholder="Collision Description"
+          />
+          <button onClick={addCollision}>Add Collision</button>
         </div>
+      </div>
+
+      {/* Timeline View */}
+      <div className="timeline-view-section">
+        <div className="view-header">
+          <h2>{selectedTimeline?.name}</h2>
+          <div className="view-toggle">
+            <button
+              className={`view-button ${activeView === 'visual' ? 'active' : ''}`}
+              onClick={() => setActiveView('visual')}
+            >
+              Visual Timeline
+            </button>
+            <button
+              className={`view-button ${activeView === 'list' ? 'active' : ''}`}
+              onClick={() => setActiveView('list')}
+            >
+              List View
+            </button>
+          </div>
+        </div>
+
+        {activeView === 'visual' ? (
+          <div className="visual-timeline">
+            {timelines.map(timeline => (
+              <div key={timeline.id} className="timeline-lane">
+                <h3>{timeline.name}</h3>
+                {periods
+                  .filter(period => period.timelineId === timeline.id)
+                  .sort((a, b) => a.startDate.localeCompare(b.startDate))
+                  .map(period => (
+                    <div
+                      key={period.id}
+                      className={`period-block ${period.tone}`}
+                      style={{ marginBottom: '20px' }}
+                    >
+                      <h4>{period.title} ({period.startDate} - {period.endDate})</h4>
+                      <p>{period.description}</p>
+                      <button onClick={() => deletePeriod(period.id)}>Delete Period</button>
+                      <div className="events">
+                        {events
+                          .filter(event => event.periodId === period.id)
+                          .sort((a, b) => a.date.localeCompare(b.date))
+                          .map(event => (
+                            <div
+                              key={event.id}
+                              className="event-card"
+                              style={{ backgroundColor: event.color }}
+                            >
+                              <h5>{event.title} ({event.date})</h5>
+                              <p>{event.description}</p>
+                              <p>Location: {environments.find(env => env.id === event.environmentId)?.name || 'None'}</p>
+                              <p>Characters: {event.characterIds.map(id => characters.find(char => char.id === id)?.name || 'Unknown').join(', ')}</p>
+                              <button onClick={() => deleteEvent(event.id)}>Delete</button>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            ))}
+            {/* Display Collisions */}
+            <div className="collisions">
+              {collisions.map(collision => {
+                const sourceEvent = events.find(e => e.id === collision.sourceEventId);
+                const targetPeriod = periods.find(p => p.id === collision.targetPeriodId);
+                return (
+                  <div key={collision.id} className="collision-line">
+                    <p>
+                      {sourceEvent?.title} in {timelines.find(t => t.id === collision.sourceTimelineId)?.name} → 
+                      {targetPeriod?.title} in {timelines.find(t => t.id === collision.targetTimelineId)?.name}: 
+                      {collision.description}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="list-timeline">
+            {timelines.map(timeline => (
+              <div key={timeline.id}>
+                <h3>{timeline.name}</h3>
+                {periods
+                  .filter(period => period.timelineId === timeline.id)
+                  .sort((a, b) => a.startDate.localeCompare(b.startDate))
+                  .map(period => (
+                    <div key={period.id} className="period-list-item">
+                      <h4>{period.title} ({period.startDate} - {period.endDate}) - {period.tone}</h4>
+                      <p>{period.description}</p>
+                      <button onClick={() => deletePeriod(period.id)}>Delete Period</button>
+                      <ul>
+                        {events
+                          .filter(event => event.periodId === period.id)
+                          .sort((a, b) => a.date.localeCompare(b.date))
+                          .map(event => (
+                            <li key={event.id}>
+                              <strong>{event.title} ({event.date})</strong>: {event.description}
+                              <br />
+                              Location: {environments.find(env => env.id === event.environmentId)?.name || 'None'}
+                              <br />
+                              Characters: {event.characterIds.map(id => characters.find(char => char.id === id)?.name || 'Unknown').join(', ')}
+                              <button onClick={() => deleteEvent(event.id)}>Delete</button>
+                            </li>
+                          ))}
+                      </ul>
+                    </div>
+                  ))}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

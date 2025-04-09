@@ -1,5 +1,6 @@
 {
   "name": "worldbuilding-app",
+  "proxy": "https://my-backend-jet-two-zoe-leonhardt-projects.vercel.app",
   "version": "0.1.0",
   "private": true,
   "homepage": "https://worldbuilding-app-plum.vercel.app/",
@@ -26,7 +27,7 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-scripts start",
+    "start": "cross-env PORT=55596 react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
@@ -56,6 +57,7 @@
     ]
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "serve": "^14.2.4",
     "webpack-manifest-plugin": "^5.0.1"
   }
