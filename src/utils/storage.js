@@ -141,5 +141,17 @@ export const loadMapData = async (mapId) => {
   }
 };
 
+export const testStorage = async () => {
+  try {
+    // Perform a simple read operation to test Firestore connectivity
+    const testSnapshot = await getDocs(collection(db, 'worlds'));
+    // If the read succeeds, return true
+    return true;
+  } catch (error) {
+    console.error('Firestore connectivity test failed:', error);
+    return false;
+  }
+};
+
 // Export saveMapData
 export { saveMapData };
