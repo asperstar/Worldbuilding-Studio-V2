@@ -1,6 +1,7 @@
 // src/utils/storage.js
 import { db } from '../firebase';
 import { collection, getDocs, setDoc, doc, deleteDoc, query, where } from 'firebase/firestore';
+import { saveMapData } from './storageExports';
 
 export const loadWorlds = async () => {
   try {
@@ -85,3 +86,6 @@ export const deleteCampaign = async (campaignId) => {
     throw error;
   }
 };
+
+// Export saveMapData
+export { saveMapData };
