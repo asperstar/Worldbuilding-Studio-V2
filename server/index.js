@@ -12,15 +12,18 @@ console.log('Firebase config:', firebaseConfig);
 const corsOptions = {
   origin: (origin, callback) => {
     const allowedOrigins = [
-      'http://localhost:3000', // Frontend dev server
-      'https://worldbuilding-bbluwxi-zoe-leonhardt-projects.vercel.app', // Current frontend production URL
-      /\.vercel\.app$/, // Allow all Vercel subdomains (for future deployments)
+      'http://localhost:3000',
+      'https://worldbuilding-bbluwxi-zoe-leonhardt-projects.vercel.app',
+      /\.vercel\.app$/,
     ];
+    console.log('CORS origin check:', { origin, allowedOrigins });
     if (!origin || allowedOrigins.some(allowed => 
       typeof allowed === 'string' ? allowed === origin : allowed.test(origin)
     )) {
+      console.log('CORS allowed for origin:', origin);
       callback(null, true);
     } else {
+      console.log('CORS rejected for origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
