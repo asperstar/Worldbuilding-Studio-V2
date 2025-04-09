@@ -8,7 +8,7 @@ const port = process.env.PORT || 3002;
 //redeploy again 2025-04-08
 
 const cors = require('cors');
-
+console.log('Firebase config:', firebaseConfig);
 const corsOptions = {
   origin: (origin, callback) => {
     const allowedOrigins = [
