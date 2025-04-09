@@ -1,14 +1,7 @@
 // src/contexts/StorageContext.js
-/* eslint-disable no-unused-vars */
-
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { 
-  auth, 
-  signIn, 
-  signUp, 
-  logOut, 
-  onAuthStateChanged 
-} from '../firebase';
+import { auth } from '../firebase';
+import { onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 
 import { 
   loadCharacters, 
@@ -24,7 +17,8 @@ import {
   saveTimelineData,
   loadCampaign,
   saveCampaign,
-  loadWorldCampaigns
+  loadWorldCampaigns,
+  testStorage
 } from '../utils/storageExports';
 
 const StorageContext = createContext();
@@ -33,6 +27,7 @@ export function StorageProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [firebaseStatus, setFirebaseStatus] = useState({ tested: false, working: false });
   const [cachedData, setCachedData] = useState({
     characters: null,
     environments: null,
@@ -49,19 +44,73 @@ export function StorageProvider({ children }) {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setIsLoading(false);
+      
+      // Test Firestore connection whenever auth state changes
+      if (user) {
+        testFirebaseConnection();
+      }
     });
 
     return unsubscribe;
   }, []);
+  
+  // Test Firebase connection
+  const testFirebaseConnection = async () => {
+    try {
+      const result = await testStorage();
+      setFirebaseStatus({ 
+        tested: true, 
+        working: result.success 
+      });
+      
+      if (!result.success) {
+        console.error('Firebase connection test failed:', result.error);
+        setError(`Firebase connection error: ${result.error}`);
+      } else {
+        setError(null);
+      }
+    } catch (err) {
+      console.error('Error during Firebase connection test:', err);
+      setFirebaseStatus({
+        tested: true,
+        working: false
+      });
+      setError(`Failed to test Firebase connection: ${err.message}`);
+    }
+  };
 
   // Auth functions
   const login = async (email, password) => {
     try {
       setError(null);
-      await signIn(email, password);
+      await signInWithEmailAndPassword(auth, email, password);
+      
+      // Test connection after login
+      await testFirebaseConnection();
+      
       return true;
     } catch (error) {
-      setError(error.message);
+      let errorMessage = "Authentication failed";
+      
+      // User-friendly error messages
+      switch(error.code) {
+        case 'auth/invalid-email':
+          errorMessage = 'Invalid email address format.';
+          break;
+        case 'auth/user-disabled':
+          errorMessage = 'This account has been disabled.';
+          break;
+        case 'auth/user-not-found':
+          errorMessage = 'No account found with this email.';
+          break;
+        case 'auth/wrong-password':
+          errorMessage = 'Incorrect password.';
+          break;
+        default:
+          errorMessage = error.message || "Authentication failed";
+      }
+      
+      setError(errorMessage);
       return false;
     }
   };
@@ -69,10 +118,31 @@ export function StorageProvider({ children }) {
   const signup = async (email, password) => {
     try {
       setError(null);
-      await signUp(email, password);
+      await createUserWithEmailAndPassword(auth, email, password);
+      
+      // Test connection after signup
+      await testFirebaseConnection();
+      
       return true;
     } catch (error) {
-      setError(error.message);
+      let errorMessage = "Registration failed";
+      
+      // User-friendly error messages
+      switch(error.code) {
+        case 'auth/email-already-in-use':
+          errorMessage = 'This email is already in use.';
+          break;
+        case 'auth/invalid-email':
+          errorMessage = 'Invalid email address format.';
+          break;
+        case 'auth/weak-password':
+          errorMessage = 'Password is too weak. Please use at least 6 characters.';
+          break;
+        default:
+          errorMessage = error.message || "Registration failed";
+      }
+      
+      setError(errorMessage);
       return false;
     }
   };
@@ -80,10 +150,23 @@ export function StorageProvider({ children }) {
   const logout = async () => {
     try {
       setError(null);
-      await logOut();
+      await signOut(auth);
+      
+      // Clear cached data on logout
+      setCachedData({
+        characters: null,
+        environments: null,
+        worlds: null,
+        lastFetched: {
+          characters: null,
+          environments: null,
+          worlds: null
+        }
+      });
+      
       return true;
     } catch (error) {
-      setError(error.message);
+      setError(`Logout error: ${error.message}`);
       return false;
     }
   };
@@ -105,7 +188,7 @@ export function StorageProvider({ children }) {
     
     try {
       // Fetch from Firestore
-      const characters = await loadCharacters(currentUser.uid);
+      const characters = await loadCharacters();
       
       // Update cache
       setCachedData(prev => ({
@@ -120,6 +203,9 @@ export function StorageProvider({ children }) {
       return characters;
     } catch (error) {
       console.error("Error fetching characters:", error);
+      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
+        setError('Authentication error. Please log in again.');
+      }
       throw error;
     }
   };
@@ -127,7 +213,7 @@ export function StorageProvider({ children }) {
   const saveAllCharacters = async (characters) => {
     if (!currentUser) return false;
     try {
-      await saveCharacters(currentUser.uid, characters);
+      await saveCharacters(characters);
       
       // Update cache
       setCachedData(prev => ({
@@ -142,6 +228,9 @@ export function StorageProvider({ children }) {
       return true;
     } catch (error) {
       console.error("Error saving characters:", error);
+      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
+        setError('Authentication error. Please log in again.');
+      }
       throw error;
     }
   };
@@ -175,6 +264,9 @@ export function StorageProvider({ children }) {
       return true;
     } catch (error) {
       console.error("Error saving character:", error);
+      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
+        setError('Authentication error. Please log in again.');
+      }
       throw error;
     }
   };
@@ -199,6 +291,9 @@ export function StorageProvider({ children }) {
       return true;
     } catch (error) {
       console.error("Error deleting character:", error);
+      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
+        setError('Authentication error. Please log in again.');
+      }
       throw error;
     }
   };
@@ -219,7 +314,7 @@ export function StorageProvider({ children }) {
     }
     
     try {
-      const environments = await loadEnvironments(currentUser.uid);
+      const environments = await loadEnvironments();
       
       setCachedData(prev => ({
         ...prev,
@@ -233,6 +328,9 @@ export function StorageProvider({ children }) {
       return environments;
     } catch (error) {
       console.error("Error fetching environments:", error);
+      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
+        setError('Authentication error. Please log in again.');
+      }
       throw error;
     }
   };
@@ -240,7 +338,7 @@ export function StorageProvider({ children }) {
   const saveAllEnvironments = async (environments) => {
     if (!currentUser) return false;
     try {
-      await saveEnvironments(currentUser.uid, environments);
+      await saveEnvironments(environments);
       
       setCachedData(prev => ({
         ...prev,
@@ -254,6 +352,9 @@ export function StorageProvider({ children }) {
       return true;
     } catch (error) {
       console.error("Error saving environments:", error);
+      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
+        setError('Authentication error. Please log in again.');
+      }
       throw error;
     }
   };
@@ -274,7 +375,7 @@ export function StorageProvider({ children }) {
     }
     
     try {
-      const worlds = await loadWorlds(currentUser.uid);
+      const worlds = await loadWorlds();
       
       setCachedData(prev => ({
         ...prev,
@@ -288,6 +389,9 @@ export function StorageProvider({ children }) {
       return worlds;
     } catch (error) {
       console.error("Error fetching worlds:", error);
+      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
+        setError('Authentication error. Please log in again.');
+      }
       throw error;
     }
   };
@@ -297,9 +401,12 @@ export function StorageProvider({ children }) {
     if (!currentUser) return { nodes: [], edges: [] };
     
     try {
-      return await loadMapData(currentUser.uid);
+      return await loadMapData();
     } catch (error) {
       console.error("Error loading map data:", error);
+      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
+        setError('Authentication error. Please log in again.');
+      }
       throw error;
     }
   };
@@ -311,6 +418,9 @@ export function StorageProvider({ children }) {
       return await saveMapData(currentUser.uid, mapData);
     } catch (error) {
       console.error("Error saving map data:", error);
+      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
+        setError('Authentication error. Please log in again.');
+      }
       throw error;
     }
   };
@@ -320,9 +430,12 @@ export function StorageProvider({ children }) {
     if (!currentUser) return { events: [], sequences: ['Main Timeline'] };
     
     try {
-      return await loadTimelineData(currentUser.uid);
+      return await loadTimelineData();
     } catch (error) {
       console.error("Error loading timeline data:", error);
+      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
+        setError('Authentication error. Please log in again.');
+      }
       throw error;
     }
   };
@@ -334,6 +447,9 @@ export function StorageProvider({ children }) {
       return await saveTimelineData(currentUser.uid, timelineData);
     } catch (error) {
       console.error("Error saving timeline data:", error);
+      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
+        setError('Authentication error. Please log in again.');
+      }
       throw error;
     }
   };
@@ -346,6 +462,9 @@ export function StorageProvider({ children }) {
       return await loadCampaign(campaignId);
     } catch (error) {
       console.error(`Error loading campaign ${campaignId}:`, error);
+      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
+        setError('Authentication error. Please log in again.');
+      }
       throw error;
     }
   };
@@ -357,6 +476,9 @@ export function StorageProvider({ children }) {
       return await saveCampaign(campaign);
     } catch (error) {
       console.error("Error saving campaign:", error);
+      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
+        setError('Authentication error. Please log in again.');
+      }
       throw error;
     }
   };
@@ -368,6 +490,9 @@ export function StorageProvider({ children }) {
       return await loadWorldCampaigns(worldId);
     } catch (error) {
       console.error(`Error loading campaigns for world ${worldId}:`, error);
+      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
+        setError('Authentication error. Please log in again.');
+      }
       throw error;
     }
   };
@@ -377,6 +502,8 @@ export function StorageProvider({ children }) {
     currentUser,
     isLoading,
     error,
+    firebaseStatus,
+    testFirebaseConnection,
     login,
     signup,
     logout,

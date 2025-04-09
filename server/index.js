@@ -50,29 +50,32 @@ app.post('/chat', async (req, res) => {
 
   try {
     const response = await axios.post(
-      'https://api.grok.x.ai/v1/chat/completions',
+      'https://api.anthropic.com/v1/messages',
       {
-        model: 'grok-3',
+        model: 'claude-3-opus-20240229', // You can also use 'claude-3-sonnet-20240229' or another Claude model
         messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage },
+          { role: 'user', content: `${systemPrompt}\n\n${userMessage}` } // Claude doesn't support a separate system prompt, so we combine them
         ],
         max_tokens: 150,
         temperature: 0.7,
       },
       {
         headers: {
-          'Authorization': `Bearer ${process.env.GROK_API_KEY}`,
+          'x-api-key': process.env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
           'Content-Type': 'application/json',
         },
       }
     );
 
-    const reply = response.data.choices[0].message.content;
+    const reply = response.data.content[0].text;
     res.json({ response: reply });
   } catch (error) {
-    console.error('Error calling Grok API:', error.message);
-    res.status(500).json({ error: 'Failed to get response from Grok API' });
+    console.error('Error calling Claude API:', error.message);
+    if (error.response) {
+      console.error('Claude API response:', error.response.data);
+    }
+    res.status(500).json({ error: 'Failed to get response from Claude API' });
   }
 });
 

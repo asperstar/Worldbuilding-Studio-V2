@@ -1,50 +1,55 @@
 // src/utils/storageExports.js
 
-// Import all functions from storage.js
-import * as StorageFunctions from './storage';
-
-// Export everything from storage
-export const {
-  // Authentication/User functions
-  testStorage,
-  getStorageUsage,
-  
-  // Character functions
+// This file serves as a barrel export to centralize all storage functionality
+import {
   loadCharacters,
-  loadCharacter,
   saveCharacter,
   saveCharacters,
   deleteCharacter,
-  
-  // Environment functions
   loadEnvironments,
-  saveEnvironment,
   saveEnvironments,
   deleteEnvironment,
-  
-  // World functions
   loadWorlds,
   loadWorldById,
-  saveWorld,
   saveWorlds,
   deleteWorld,
-  
-  // Campaign functions
-  loadCampaign,
-  saveCampaign,
-  loadCampaigns,
-  loadWorldCampaigns,
-  
-  // Map functions
   loadMapData,
   saveMapData,
-  
-  // Timeline functions
   loadTimelineData,
   saveTimelineData,
-  loadWorldTimeline,
-  
-  // Import/Export functions
+  loadWorldCampaigns,
+  loadCampaign,
+  loadCampaigns,
+  saveCampaign,
+  deleteCampaign,
   exportAllData,
-  importAllData
-} = StorageFunctions;
+  importAllData,
+  testStorage
+} from './storage';
+
+// Re-export all functions
+export {
+  loadCharacters,
+  saveCharacter,
+  saveCharacters,
+  deleteCharacter,
+  loadEnvironments,
+  saveEnvironments,
+  deleteEnvironment,
+  loadWorlds,
+  loadWorldById,
+  saveWorlds,
+  deleteWorld,
+  loadMapData,
+  saveMapData,
+  loadTimelineData,
+  saveTimelineData,
+  loadWorldCampaigns,
+  loadCampaign,
+  loadCampaigns,
+  saveCampaign,
+  deleteCampaign,
+  exportAllData,
+  importAllData,
+  testStorage
+};

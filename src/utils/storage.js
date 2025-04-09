@@ -15,10 +15,13 @@ const ensureAuthenticated = () => {
 };
 
 // World functions
-export const loadWorlds = async () => {
+export const loadWorlds = async (userId = null) => {
   try {
-    ensureAuthenticated();
-    const worldsSnapshot = await getDocs(collection(db, 'worlds'));
+    const user = ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
+    const worldsQuery = query(collection(db, 'worlds'), where('userId', '==', userIdToUse));
+    const worldsSnapshot = await getDocs(worldsQuery);
     const worlds = worldsSnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -30,15 +33,21 @@ export const loadWorlds = async () => {
   }
 };
 
-export const loadWorldById = async (worldId) => {
+export const loadWorldById = async (worldId, userId = null) => {
   try {
-    ensureAuthenticated();
+    const user = ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
     const worldDoc = await getDoc(doc(db, 'worlds', worldId.toString()));
     if (worldDoc.exists()) {
-      return {
+      const worldData = {
         id: worldDoc.id,
         ...worldDoc.data()
       };
+      if (worldData.userId !== userIdToUse) {
+        throw new Error('Unauthorized access to world');
+      }
+      return worldData;
     } else {
       console.error(`World with ID ${worldId} not found`);
       return null;
@@ -49,11 +58,14 @@ export const loadWorldById = async (worldId) => {
   }
 };
 
-export const saveWorlds = async (worlds) => {
+export const saveWorlds = async (worlds, userId = null) => {
   try {
-    ensureAuthenticated();
+    const user = ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
     for (const world of worlds) {
-      await setDoc(doc(db, 'worlds', world.id.toString()), world);
+      const worldToSave = { ...world, userId: userIdToUse };
+      await setDoc(doc(db, 'worlds', world.id.toString()), worldToSave);
     }
     return true;
   } catch (error) {
@@ -62,11 +74,18 @@ export const saveWorlds = async (worlds) => {
   }
 };
 
-export const deleteWorld = async (worldId) => {
+export const deleteWorld = async (worldId, userId = null) => {
   try {
-    ensureAuthenticated();
-    await deleteDoc(doc(db, 'worlds', worldId.toString()));
-    return true;
+    const user = ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
+    const worldDoc = await getDoc(doc(db, 'worlds', worldId.toString()));
+    if (worldDoc.exists() && worldDoc.data().userId === userIdToUse) {
+      await deleteDoc(doc(db, 'worlds', worldId.toString()));
+      return true;
+    } else {
+      throw new Error('Unauthorized or world not found');
+    }
   } catch (error) {
     console.error('Error deleting world from Firestore:', error);
     throw error;
@@ -74,12 +93,15 @@ export const deleteWorld = async (worldId) => {
 };
 
 // Campaign functions
-export const loadWorldCampaigns = async (worldId) => {
+export const loadWorldCampaigns = async (worldId, userId = null) => {
   try {
-    ensureAuthenticated();
+    const user = ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
     const campaignsQuery = query(
       collection(db, 'campaigns'),
-      where('worldId', '==', parseInt(worldId))
+      where('worldId', '==', parseInt(worldId)),
+      where('userId', '==', userIdToUse)
     );
     const campaignsSnapshot = await getDocs(campaignsQuery);
     const campaigns = campaignsSnapshot.docs.map(doc => ({
@@ -93,10 +115,13 @@ export const loadWorldCampaigns = async (worldId) => {
   }
 };
 
-export const loadCampaigns = async () => {
+export const loadCampaigns = async (userId = null) => {
   try {
-    ensureAuthenticated();
-    const campaignsSnapshot = await getDocs(collection(db, 'campaigns'));
+    const user = ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
+    const campaignsQuery = query(collection(db, 'campaigns'), where('userId', '==', userIdToUse));
+    const campaignsSnapshot = await getDocs(campaignsQuery);
     const campaigns = campaignsSnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -108,15 +133,21 @@ export const loadCampaigns = async () => {
   }
 };
 
-export const loadCampaign = async (campaignId) => {
+export const loadCampaign = async (campaignId, userId = null) => {
   try {
-    ensureAuthenticated();
+    const user = ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
     const campaignDoc = await getDoc(doc(db, 'campaigns', campaignId.toString()));
     if (campaignDoc.exists()) {
-      return {
+      const campaignData = {
         id: campaignDoc.id,
         ...campaignDoc.data()
       };
+      if (campaignData.userId !== userIdToUse) {
+        throw new Error('Unauthorized access to campaign');
+      }
+      return campaignData;
     } else {
       console.error(`Campaign with ID ${campaignId} not found`);
       return null;
@@ -127,10 +158,13 @@ export const loadCampaign = async (campaignId) => {
   }
 };
 
-export const saveCampaign = async (campaign) => {
+export const saveCampaign = async (campaign, userId = null) => {
   try {
-    ensureAuthenticated();
-    await setDoc(doc(db, 'campaigns', campaign.id.toString()), campaign);
+    const user = ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
+    const campaignToSave = { ...campaign, userId: userIdToUse };
+    await setDoc(doc(db, 'campaigns', campaign.id.toString()), campaignToSave);
     return true;
   } catch (error) {
     console.error('Error saving campaign to Firestore:', error);
@@ -138,11 +172,18 @@ export const saveCampaign = async (campaign) => {
   }
 };
 
-export const deleteCampaign = async (campaignId) => {
+export const deleteCampaign = async (campaignId, userId = null) => {
   try {
-    ensureAuthenticated();
-    await deleteDoc(doc(db, 'campaigns', campaignId.toString()));
-    return true;
+    const user = ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
+    const campaignDoc = await getDoc(doc(db, 'campaigns', campaignId.toString()));
+    if (campaignDoc.exists() && campaignDoc.data().userId === userIdToUse) {
+      await deleteDoc(doc(db, 'campaigns', campaignId.toString()));
+      return true;
+    } else {
+      throw new Error('Unauthorized or campaign not found');
+    }
   } catch (error) {
     console.error('Error deleting campaign from Firestore:', error);
     throw error;
@@ -150,10 +191,13 @@ export const deleteCampaign = async (campaignId) => {
 };
 
 // Character functions
-export const loadCharacters = async () => {
+export const loadCharacters = async (userId = null) => {
   try {
-    ensureAuthenticated();
-    const charactersSnapshot = await getDocs(collection(db, 'characters'));
+    const user = ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
+    const charactersQuery = query(collection(db, 'characters'), where('userId', '==', userIdToUse));
+    const charactersSnapshot = await getDocs(charactersQuery);
     const characters = charactersSnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -165,15 +209,21 @@ export const loadCharacters = async () => {
   }
 };
 
-export const loadCharacter = async (characterId) => {
+export const loadCharacter = async (characterId, userId = null) => {
   try {
-    ensureAuthenticated();
+    const user = ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
     const characterDoc = await getDoc(doc(db, 'characters', characterId.toString()));
     if (characterDoc.exists()) {
-      return {
+      const characterData = {
         id: characterDoc.id,
         ...characterDoc.data()
       };
+      if (characterData.userId !== userIdToUse) {
+        throw new Error('Unauthorized access to character');
+      }
+      return characterData;
     } else {
       console.error(`Character with ID ${characterId} not found`);
       return null;
@@ -184,10 +234,13 @@ export const loadCharacter = async (characterId) => {
   }
 };
 
-export const saveCharacter = async (character) => {
+export const saveCharacter = async (character, userId = null) => {
   try {
-    ensureAuthenticated();
-    await setDoc(doc(db, 'characters', character.id.toString()), character);
+    const user = ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
+    const characterToSave = { ...character, userId: userIdToUse };
+    await setDoc(doc(db, 'characters', character.id.toString()), characterToSave);
     return true;
   } catch (error) {
     console.error('Error saving character to Firestore:', error);
@@ -195,11 +248,14 @@ export const saveCharacter = async (character) => {
   }
 };
 
-export const saveCharacters = async (characters) => {
+export const saveCharacters = async (characters, userId = null) => {
   try {
-    ensureAuthenticated();
+    const user = ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
     for (const character of characters) {
-      await setDoc(doc(db, 'characters', character.id.toString()), character);
+      const characterToSave = { ...character, userId: userIdToUse };
+      await setDoc(doc(db, 'characters', character.id.toString()), characterToSave);
     }
     return true;
   } catch (error) {
@@ -208,11 +264,18 @@ export const saveCharacters = async (characters) => {
   }
 };
 
-export const deleteCharacter = async (characterId) => {
+export const deleteCharacter = async (characterId, userId = null) => {
   try {
-    ensureAuthenticated();
-    await deleteDoc(doc(db, 'characters', characterId.toString()));
-    return true;
+    const user = ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
+    const characterDoc = await getDoc(doc(db, 'characters', characterId.toString()));
+    if (characterDoc.exists() && characterDoc.data().userId === userIdToUse) {
+      await deleteDoc(doc(db, 'characters', characterId.toString()));
+      return true;
+    } else {
+      throw new Error('Unauthorized or character not found');
+    }
   } catch (error) {
     console.error('Error deleting character from Firestore:', error);
     throw error;
@@ -220,10 +283,13 @@ export const deleteCharacter = async (characterId) => {
 };
 
 // Environment functions
-export const loadEnvironments = async () => {
+export const loadEnvironments = async (userId = null) => {
   try {
-    ensureAuthenticated();
-    const environmentsSnapshot = await getDocs(collection(db, 'environments'));
+    const user = ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
+    const environmentsQuery = query(collection(db, 'environments'), where('userId', '==', userIdToUse));
+    const environmentsSnapshot = await getDocs(environmentsQuery);
     const environments = environmentsSnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -235,11 +301,14 @@ export const loadEnvironments = async () => {
   }
 };
 
-export const saveEnvironments = async (environments) => {
+export const saveEnvironments = async (environments, userId = null) => {
   try {
-    ensureAuthenticated();
+    const user = ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
     for (const environment of environments) {
-      await setDoc(doc(db, 'environments', environment.id.toString()), environment);
+      const environmentToSave = { ...environment, userId: userIdToUse };
+      await setDoc(doc(db, 'environments', environment.id.toString()), environmentToSave);
     }
     return true;
   } catch (error) {
@@ -248,11 +317,18 @@ export const saveEnvironments = async (environments) => {
   }
 };
 
-export const deleteEnvironment = async (environmentId) => {
+export const deleteEnvironment = async (environmentId, userId = null) => {
   try {
-    ensureAuthenticated();
-    await deleteDoc(doc(db, 'environments', environmentId.toString()));
-    return true;
+    const user = ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
+    const environmentDoc = await getDoc(doc(db, 'environments', environmentId.toString()));
+    if (environmentDoc.exists() && environmentDoc.data().userId === userIdToUse) {
+      await deleteDoc(doc(db, 'environments', environmentId.toString()));
+      return true;
+    } else {
+      throw new Error('Unauthorized or environment not found');
+    }
   } catch (error) {
     console.error('Error deleting environment from Firestore:', error);
     throw error;
@@ -260,15 +336,17 @@ export const deleteEnvironment = async (environmentId) => {
 };
 
 // Map functions
-export const loadMapData = async () => {
+export const loadMapData = async (userId = null) => {
   try {
-    ensureAuthenticated();
-    const mapDoc = await getDoc(doc(db, 'maps', 'default'));
+    const user = ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
+    const mapDoc = await getDoc(doc(db, 'maps', userIdToUse));
     if (mapDoc.exists()) {
       return mapDoc.data();
     } else {
       console.log('No map data found, returning empty default');
-      return { nodes: [], edges: [] };
+      return { nodes: [], edges: [], imageUrl: '' };
     }
   } catch (error) {
     console.error('Error loading map data from Firestore:', error);
@@ -276,15 +354,17 @@ export const loadMapData = async () => {
   }
 };
 
-export const saveMapData = async (mapData) => {
+export const saveMapData = async (userId, mapData) => {
   try {
     const user = ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
     const mapToSave = {
       ...mapData,
-      imageUrl: mapData.imageUrl || '',
-      userId: user.uid // Add userId to scope the data
+      userId: userIdToUse,
+      imageUrl: mapData.imageUrl || ''
     };
-    await setDoc(doc(db, 'maps', 'default'), mapToSave);
+    await setDoc(doc(db, 'maps', userIdToUse), mapToSave);
     return true;
   } catch (error) {
     console.error('Error saving map data to Firestore:', error);
@@ -293,14 +373,20 @@ export const saveMapData = async (mapData) => {
 };
 
 // Timeline functions
-export const loadTimelineData = async () => {
+export const loadTimelineData = async (userId = null) => {
   try {
-    ensureAuthenticated();
-    const timelineDoc = await getDoc(doc(db, 'timelines', 'default'));
+    const user = ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
+    const timelineDoc = await getDoc(doc(db, 'timelines', userIdToUse));
     if (timelineDoc.exists()) {
-      return timelineDoc.data();
+      const timelineData = timelineDoc.data();
+      if (timelineData.userId !== userIdToUse) {
+        throw new Error('Unauthorized access to timeline');
+      }
+      return timelineData;
     } else {
-      return { events: [], sequences: ['Main Timeline'] };
+      return { events: [], sequences: ['Main Timeline'], userId: userIdToUse };
     }
   } catch (error) {
     console.error('Error loading timeline data from Firestore:', error);
@@ -308,10 +394,13 @@ export const loadTimelineData = async () => {
   }
 };
 
-export const saveTimelineData = async (timelineData) => {
+export const saveTimelineData = async (userId, timelineData) => {
   try {
-    ensureAuthenticated();
-    await setDoc(doc(db, 'timelines', 'default'), timelineData);
+    const user = ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
+    const timelineToSave = { ...timelineData, userId: userIdToUse };
+    await setDoc(doc(db, 'timelines', userIdToUse), timelineToSave);
     return true;
   } catch (error) {
     console.error('Error saving timeline data to Firestore:', error);
@@ -319,103 +408,49 @@ export const saveTimelineData = async (timelineData) => {
   }
 };
 
-// Helper functions
-export const loadWorldTimeline = async (worldId) => {
+// Export/Import functions
+export const exportAllData = async (userId = null, options = {}) => {
   try {
-    ensureAuthenticated();
-    const timelineDoc = await getDoc(doc(db, 'timelines', `world_${worldId}`));
-    if (timelineDoc.exists()) {
-      return timelineDoc.data();
-    } else {
-      return { events: [], sequences: ['Main Timeline'] };
-    }
-  } catch (error) {
-    console.error('Error loading world timeline data from Firestore:', error);
-    throw error;
-  }
-};
-
-export const getCharacterById = async (characterId) => {
-  return await loadCharacter(characterId);
-};
-
-export const getWorldById = async (worldId) => {
-  return await loadWorldById(worldId);
-};
-
-export const getEnvironmentById = async (environmentId) => {
-  try {
-    ensureAuthenticated();
-    const environmentDoc = await getDoc(doc(db, 'environments', environmentId.toString()));
-    if (environmentDoc.exists()) {
-      return {
-        id: environmentDoc.id,
-        ...environmentDoc.data()
-      };
-    } else {
-      return null;
-    }
-  } catch (error) {
-    console.error('Error loading environment from Firestore:', error);
-    throw error;
-  }
-};
-
-export const getCampaignById = async (campaignId) => {
-  return await loadCampaign(campaignId);
-};
-
-export const getCharacterRelationships = async (characterId) => {
-  try {
-    ensureAuthenticated();
-    const characterDoc = await loadCharacter(characterId);
-    return characterDoc?.relationships || [];
-  } catch (error) {
-    console.error('Error loading character relationships from Firestore:', error);
-    return [];
-  }
-};
-
-export const testStorage = async () => {
-  try {
-    await getDocs(collection(db, 'worlds'));
-    return { success: true, message: 'Firebase connection successful' };
-  } catch (error) {
-    console.error('Firestore connectivity test failed:', error);
-    return { success: false, error: error.message };
-  }
-};
-
-// Export all methods used throughout your app
-export const exportAllData = async (options = {}) => {
-  try {
-    ensureAuthenticated();
+    const user = ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
     const data = {};
-    
+
     if (options.characters) {
-      data.characters = await loadCharacters();
+      data.characters = await loadCharacters(userIdToUse);
     }
-    
+
     if (options.environments) {
-      data.environments = await loadEnvironments();
+      data.environments = await loadEnvironments(userIdToUse);
     }
-    
+
     if (options.worlds) {
-      data.worlds = await loadWorlds();
+      data.worlds = await loadWorlds(userIdToUse);
     }
-    
+
     if (options.campaigns) {
-      data.campaigns = await loadCampaigns();
+      data.campaigns = await loadCampaigns(userIdToUse);
     }
-    
+
     if (options.map) {
-      data.mapData = await loadMapData();
+      data.mapData = await loadMapData(userIdToUse);
     }
-    
+
     if (options.timeline) {
-      data.timelineData = await loadTimelineData();
+      data.timelineData = await loadTimelineData(userIdToUse);
     }
-    
+
+    // Add placeholder for memories and chat data if requested
+    if (options.memories) {
+      // In a real implementation, you'd load memories here
+      data.memories = {};
+    }
+
+    if (options.chats) {
+      // In a real implementation, you'd load chat history here
+      data.chatData = {};
+    }
+
     return data;
   } catch (error) {
     console.error('Error exporting data:', error);
@@ -423,40 +458,76 @@ export const exportAllData = async (options = {}) => {
   }
 };
 
-export const importAllData = async (data) => {
+export const importAllData = async (data, userId = null) => {
   try {
-    ensureAuthenticated();
+    const user = ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
     const results = [];
-    
-    if (data.characters) {
-      results.push(await saveCharacters(data.characters));
+
+    if (data.characters && Array.isArray(data.characters)) {
+      results.push(await saveCharacters(data.characters, userIdToUse));
     }
-    
-    if (data.environments) {
-      results.push(await saveEnvironments(data.environments));
+
+    if (data.environments && Array.isArray(data.environments)) {
+      results.push(await saveEnvironments(data.environments, userIdToUse));
     }
-    
-    if (data.worlds) {
-      results.push(await saveWorlds(data.worlds));
+
+    if (data.worlds && Array.isArray(data.worlds)) {
+      results.push(await saveWorlds(data.worlds, userIdToUse));
     }
-    
-    if (data.campaigns) {
+
+    if (data.campaigns && Array.isArray(data.campaigns)) {
       for (const campaign of data.campaigns) {
-        results.push(await saveCampaign(campaign));
+        results.push(await saveCampaign(campaign, userIdToUse));
       }
     }
-    
+
     if (data.mapData) {
-      results.push(await saveMapData(data.mapData));
+      results.push(await saveMapData(userIdToUse, data.mapData));
     }
-    
+
     if (data.timelineData) {
-      results.push(await saveTimelineData(data.timelineData));
+      results.push(await saveTimelineData(userIdToUse, data.timelineData));
     }
-    
+
+    // Add handling for memories and chat data if implemented
+    // This would go here
+
     return results.every(result => result === true);
   } catch (error) {
     console.error('Error importing data:', error);
     throw error;
+  }
+};
+
+// Test connection function
+export const testStorage = async () => {
+  try {
+    // Try to get the current user first
+    const user = auth.currentUser;
+    if (!user) {
+      return { 
+        success: false, 
+        error: 'User not authenticated', 
+        authState: 'Not logged in' 
+      };
+    }
+    
+    // Try a simple Firestore operation
+    await getDocs(query(collection(db, 'worlds'), where('userId', '==', user.uid)));
+    return { 
+      success: true, 
+      message: 'Firebase connection successful',
+      userId: user.uid
+    };
+  } catch (error) {
+    console.error('Firestore connectivity test failed:', error);
+    return { 
+      success: false, 
+      error: error.message,
+      errorCode: error.code,
+      authState: auth.currentUser ? 'Logged in' : 'Not logged in'
+    };
   }
 };

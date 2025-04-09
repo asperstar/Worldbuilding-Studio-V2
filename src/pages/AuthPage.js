@@ -1,38 +1,96 @@
 // src/pages/AuthPage.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   getAuth, 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword,
-  //AuthError
+  onAuthStateChanged
 } from 'firebase/auth';
+import { testStorage } from '../utils/storage';
 
 function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const auth = getAuth();
   
-  // In AuthPage.js
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setError('');
+  // Check if user is already logged in
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        navigate('/worlds');
+      }
+    });
+    
+    return () => unsubscribe();
+  }, [auth, navigate]);
   
-  try {
-    if (isLogin) {
-      await signInWithEmailAndPassword(auth, email, password);
-    } else {
-      await createUserWithEmailAndPassword(auth, email, password);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    
+    try {
+      let userCredential;
+      
+      if (isLogin) {
+        userCredential = await signInWithEmailAndPassword(auth, email, password);
+      } else {
+        userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      }
+      
+      // Test Firestore connection
+      const testResult = await testStorage();
+      console.log('Firestore connection test:', testResult);
+      
+      if (!testResult.success) {
+        console.warn('Firebase connection issue:', testResult);
+        setError(`Authentication successful but there was an issue connecting to the database: ${testResult.error}`);
+        setLoading(false);
+        return;
+      }
+      
+      navigate('/worlds');
+    } catch (error) {
+      console.error("Auth error:", error);
+      let errorMessage = "Authentication failed";
+      
+      // More user-friendly error messages
+      switch(error.code) {
+        case 'auth/invalid-email':
+          errorMessage = 'Invalid email address format.';
+          break;
+        case 'auth/user-disabled':
+          errorMessage = 'This account has been disabled.';
+          break;
+        case 'auth/user-not-found':
+          errorMessage = 'No account found with this email.';
+          break;
+        case 'auth/wrong-password':
+          errorMessage = 'Incorrect password.';
+          break;
+        case 'auth/email-already-in-use':
+          errorMessage = 'This email is already in use by another account.';
+          break;
+        case 'auth/weak-password':
+          errorMessage = 'Password is too weak. Please use at least 6 characters.';
+          break;
+        case 'auth/network-request-failed':
+          errorMessage = 'Network error. Please check your connection.';
+          break;
+        default:
+          errorMessage = error.message || "Authentication failed";
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
     }
-    navigate('/worlds');
-  } catch (error) {
-    console.error("Auth error:", error);
-    setError(error.message || "Authentication failed");
-  }
-};
+  };
   
   return (
     <div className="auth-page">
@@ -51,6 +109,7 @@ const handleSubmit = async (e) => {
               onChange={(e) => setEmail(e.target.value)} 
               required 
               placeholder="Enter your email"
+              disabled={loading}
             />
           </div>
           
@@ -64,11 +123,12 @@ const handleSubmit = async (e) => {
               required 
               minLength="6"
               placeholder="Enter your password"
+              disabled={loading}
             />
           </div>
           
-          <button type="submit" className="submit-button">
-            {isLogin ? 'Sign In' : 'Create Account'}
+          <button type="submit" className="submit-button" disabled={loading}>
+            {loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Create Account')}
           </button>
         </form>
         
@@ -79,6 +139,7 @@ const handleSubmit = async (e) => {
               type="button"
               className="toggle-button"
               onClick={() => setIsLogin(!isLogin)}
+              disabled={loading}
             >
               {isLogin ? 'Create one' : 'Sign in'}
             </button>

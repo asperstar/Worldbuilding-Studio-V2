@@ -7,7 +7,7 @@ import { loadCharacters } from '../utils/storage';
 // Use a relative URL to leverage the proxy in development
 const API_URL = process.env.NODE_ENV === 'production'
   ? 'https://my-backend-jet-two.vercel.app'
-  : ''; // Empty string means relative URL (e.g., /chat), which uses the proxy
+  : 'http://localhost:3002'; // Directly point to your backend
 
 function ChatPage() {
   const [characters, setCharacters] = useState([]);
