@@ -87,9 +87,9 @@ async function testOllamaConnection() {
   return results;
 }
 // In your ChatPage.js
-const API_URL = process.env.NODE_ENV === 'production' 
-  ? "https://your-production-api-url.com" 
-  : "http://localhost:3002";
+const API_URL = process.env.NODE_ENV === 'production'
+  ? 'https://my-backend-zoe-leonhards-projects.vercel.app/'
+  : 'http://localhost:3002';
 //to Claude (or ai): the above code is very sensative to change, any time I change it to anything else , it breaks the chat feature. please don't chnage it unless you want to help me troubleshoot it 
 
 function ChatPage() {

@@ -1,539 +1,62 @@
 {
-  
-
-
-
   "name": "worldbuilding-app",
-  
-
-
-
   "version": "0.1.0",
-  
-
-
-
   "private": true,
-  
-
-
-
-  "homepage": ".",
-  
-
-
-
+  "homepage": "https://worldbuilding-app-plum.vercel.app/",
   "dependencies": {
-  
-
-
-
-    
-
-
-
-  "@testing-library/dom": "^10.4.0",
-  
-
-
-
-    
-
-
-
-  "@testing-library/jest-dom": "^6.6.3",
-  
-
-
-
-    
-
-
-
-  "@testing-library/react": "^16.2.0",
-  
-
-
-
-    
-
-
-
-  "@testing-library/user-event": "^13.5.0",
-  
-
-
-
-    
-
-
-
-  "@vercel/node": "^2.15.0",
-  
-
-
-
-    
-
-
-
-  "axios": "^1.8.4",
-  
-
-
-
-    
-
-
-
-  "chromadb": "^2.1.0",
-  
-
-
-
-    
-
-
-
-  "deploy": "^1.0.3",
-  
-
-
-
-    
-
-
-
-  "firebase": "^11.6.0",
-  
-
-
-
-    
-
-
-
-  "firebase-admin": "^13.2.0",
-  
-
-
-
-    
-
-
-
-  "firebase-functions": "^6.3.2",
-  
-
-
-
-    
-
-
-
-  "netlify": "^13.3.4",
-  
-
-
-
-    
-
-
-
-  "node-fetch": "^3.3.2",
-  
-
-
-
-    
-
-
-
-  "openai": "^4.91.0",
-  
-
-
-
-    
-
-
-
-  "react": "^18.2.0",
-  
-
-
-
-    
-
-
-
-  "react-dom": "^18.2.0",
-  
-
-
-
-    
-
-
-
-  "react-router-dom": "^6.16.0",
-  
-
-
-
-    
-
-
-
-  "react-scripts": "^5.0.1",
-  
-
-
-
-    
-
-
-
-  "reactflow": "^11.11.4",
-  
-
-
-
-    
-
-
-
-  "web-vitals": "^2.1.4"
-  
-
-
-
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.2.0",
+    "@testing-library/user-event": "^13.5.0",
+    "@vercel/node": "^2.15.0",
+    "axios": "^1.8.4",
+    "chromadb": "^2.1.0",
+    "deploy": "^1.0.3",
+    "firebase": "^11.6.0",
+    "firebase-admin": "^13.2.0",
+    "firebase-functions": "^6.3.2",
+    "netlify": "^13.3.4",
+    "node-fetch": "^3.3.2",
+    "openai": "^4.91.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.16.0",
+    "react-scripts": "^5.0.1",
+    "reactflow": "^11.11.4",
+    "web-vitals": "^2.1.4"
   },
-  
-
-
-
   "scripts": {
-  
-
-
-
-    
-
-
-
-  "start": "react-scripts start",
-  
-
-
-
-    
-
-
-
-  "build": "react-scripts build",
-  
-
-
-
-    
-
-
-
-  
-
-
-
-    
-
-
-
-  "test": "react-scripts test",
-  
-
-
-
-    
-
-
-
-  "eject": "react-scripts eject",
-  
-
-
-
-    
-
-
-
-  "serve": "serve -s build",
-  
-
-
-
-    
-
-
-
-  "predeploy": "npm run build",
-  
-
-
-
-    
-
-
-
-  "deploy": "vercel",
-  
-
-
-
-    
-
-
-
-  "react-scripts": "^5.0.1"
-  
-
-
-
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "serve": "serve -s build",
+    "predeploy": "npm run build",
+    "deploy": "vercel"
   },
-  
-
-
-
   "eslintConfig": {
-  
-
-
-
-    
-
-
-
-  "extends": [
-  
-
-
-
-    
-
-
-
-    
-
-
-
-  "react-app",
-  
-
-
-
-    
-
-
-
-    
-
-
-
-  "react-app/jest"
-  
-
-
-
-    
-
-
-
-  ],
-  
-
-
-
-    
-
-
-
-  "rules": {
-  
-
-
-
-    
-
-
-
-    
-
-
-
-  "no-unused-vars": "warn"
-  
-
-
-
-    
-
-
-
-  }
-  
-
-
-
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ],
+    "rules": {
+      "no-unused-vars": "warn"
+    }
   },
-  
-
-
-
   "browserslist": {
-  
-
-
-
-    
-
-
-
-  "production": [
-  
-
-
-
-    
-
-
-
-    
-
-
-
-  ">0.2%",
-  
-
-
-
-    
-
-
-
-    
-
-
-
-  "not dead",
-  
-
-
-
-    
-
-
-
-    
-
-
-
-  "not op_mini all"
-  
-
-
-
-    
-
-
-
-  ],
-  
-
-
-
-    
-
-
-
-  "development": [
-  
-
-
-
-    
-
-
-
-    
-
-
-
-  "last 1 chrome version",
-  
-
-
-
-    
-
-
-
-    
-
-
-
-  "last 1 firefox version",
-  
-
-
-
-    
-
-
-
-    
-
-
-
-  "last 1 safari version"
-  
-
-
-
-    
-
-
-
-  ]
-  
-
-
-
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
   },
-  
-
-
-
   "devDependencies": {
-  
-
-
-
-    
-
-
-
-  "serve": "^14.2.4",
-  
-
-
-
-    
-
-
-
-  "webpack-manifest-plugin": "^5.0.1"
-  
-
-
-
+    "serve": "^14.2.4",
+    "webpack-manifest-plugin": "^5.0.1"
   }
 }

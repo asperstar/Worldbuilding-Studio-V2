@@ -1,34 +1,28 @@
-// Create a file called ErrorSuppressor.js in your components directory
-import React, { useEffect } from 'react';
+import React, { Component } from 'react';
 
-const ErrorSuppressor = ({ children }) => {
-  useEffect(() => {
-    // Store original console.error
-    const originalConsoleError = console.error;
-    
-    // Replace console.error with our filtered version
-    console.error = (...args) => {
-      // Filter out ResizeObserver errors
-      if (args[0] && typeof args[0] === 'string' && args[0].includes('ResizeObserver loop')) {
-        return;
-      }
-      originalConsoleError(...args);
-    };
-    
-    // Disable error overlay in development
-    if (typeof window !== 'undefined' && window.__REACT_ERROR_OVERLAY__) {
-      window.__REACT_ERROR_OVERLAY__.handleRuntimeError = () => {};
-      window.__REACT_ERROR_OVERLAY__.startReportingRuntimeErrors = () => {};
-      window.__REACT_ERROR_OVERLAY__.stopReportingRuntimeErrors = () => {};
+class ErrorSuppressor extends Component {
+  state = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('Error caught in boundary:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div>
+          <h1>Something went wrong.</h1>
+          <p>{this.state.error?.message || 'Unknown error'}</p>
+          <p>Check the console for more details.</p>
+        </div>
+      );
     }
-    
-    return () => {
-      // Restore original console.error when component unmounts
-      console.error = originalConsoleError;
-    };
-  }, []);
-
-  return <>{children}</>;
-};
+    return this.props.children;
+  }
+}
 
 export default ErrorSuppressor;
