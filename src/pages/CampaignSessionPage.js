@@ -1,4 +1,5 @@
 // src/pages/CampaignSessionPage.js
+/* eslint-disable no-template-curly-in-string */
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { loadCampaign, saveCampaign, loadCharacters, loadWorlds } from '../utils/storage';

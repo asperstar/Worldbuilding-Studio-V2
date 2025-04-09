@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import React, { useState, useEffect, useCallback } from 'react';
 import CharacterForm from '../components/characters/CharacterForm';
 import { testStorage } from '../utils/storage';
