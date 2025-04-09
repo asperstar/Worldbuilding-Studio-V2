@@ -88,4 +88,4 @@ export const deleteCampaign = async (campaignId) => {
 };
 
 // Export saveMapData
-export { saveMapData, loadCampaign, saveWorld};
+export { saveMapData};
