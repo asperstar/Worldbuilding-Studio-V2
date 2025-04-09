@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: worldbuilding-studio
+    env: static
+    buildCommand: npm run build
+    startCommand: serve -s build
+    envVars:
+      - key: CI
+        value: false
