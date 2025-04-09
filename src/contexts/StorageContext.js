@@ -1,4 +1,6 @@
 // src/contexts/StorageContext.js
+/* eslint-disable no-unused-vars */
+
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { 
   auth, 

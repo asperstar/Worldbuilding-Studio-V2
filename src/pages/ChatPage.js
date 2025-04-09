@@ -1,4 +1,5 @@
 // src/pages/ChatPage.js
+/* eslint-disable no-unused-vars */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   loadCharacters,

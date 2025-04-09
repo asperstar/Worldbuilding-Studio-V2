@@ -1,3 +1,5 @@
+/* eslint-disable no-undef*/
+
 import { 
   db, 
   auth, 
@@ -15,8 +17,9 @@ import {
   ref,
   uploadBytes,
   getDownloadURL,
-  deleteObject 
+  deleteObject, 
 } from '../firebase';
+
 
 
 // Get the current user ID

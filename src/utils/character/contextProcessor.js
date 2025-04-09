@@ -1,4 +1,5 @@
 // src/utils/character/contextProcessor.js
+/* eslint-disable no-unused-vars */ 
 import { auth } from '../firebase';
 import { 
   getCharacterMemories, 
