@@ -7,10 +7,8 @@ import { getCampaignMemories, addCampaignMemory } from '../utils/memory/campaign
 import { orchestrateCharacterInteraction } from '../utils/campaignManager';
 import { getCachedEnvironment } from '../utils/environment-selector';
 import { enhanceCharacterAPI } from '../utils/character/contextProcessor';
+import { API_URL } from '../utils/storage';
 
-const API_URL = process.env.NODE_ENV === 'production'
-  ? process.env.REACT_APP_API_URL || 'https://my-backend-jet-two.vercel.app'
-  : 'http://localhost:3002';
 
 function CampaignSessionPage() {
   const { campaignId } = useParams();

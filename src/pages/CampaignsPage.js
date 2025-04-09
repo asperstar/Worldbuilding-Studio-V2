@@ -169,28 +169,32 @@ function CampaignsPage() {
     }
   };
   
-  const deleteCampaign = (campaignId) => {
-    // Remove from local state
-    setCampaigns(campaigns.filter(c => c.id !== campaignId));
-    
-    // Remove from world
-    if (world) {
-      const updatedWorld = {
-        ...world,
-        campaignIds: (world.campaignIds || []).filter(id => id !== campaignId)
-      };
-      
-      // Update in storage
-      const worlds = loadWorlds();
-      const updatedWorlds = worlds.map(w => 
-        w.id === updatedWorld.id ? updatedWorld : w
-      );
-      saveWorlds(updatedWorlds);
-      setWorld(updatedWorld);
+  const deleteCampaign = async (campaignId) => {
+    try {
+      // Remove from Firestore
+      await deleteCampaign(campaignId);
+  
+      // Remove from local state
+      setCampaigns(campaigns.filter(c => c.id !== campaignId));
+  
+      // Remove from world
+      if (world) {
+        const updatedWorld = {
+          ...world,
+          campaignIds: (world.campaignIds || []).filter(id => id !== campaignId)
+        };
+  
+        // Update in Firestore
+        const worlds = await loadWorlds();
+        const updatedWorlds = worlds.map(w => 
+          w.id === updatedWorld.id ? updatedWorld : w
+        );
+        await saveWorlds(updatedWorlds);
+        setWorld(updatedWorld);
+      }
+    } catch (error) {
+      console.error('Error deleting campaign:', error);
     }
-    
-    // Remove from localStorage
-    localStorage.removeItem(`worldbuilding-campaign-${campaignId}`);
   };
   
   return (

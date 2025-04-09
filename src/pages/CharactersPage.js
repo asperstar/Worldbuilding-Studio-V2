@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import { useStorage } from '../contexts/StorageContext';
 import { trace } from 'firebase/performance'
 import { perf } from '../firebase';
+import { migrateToFirestore } from '../utils/migrateToFirestore';
 function CharactersPage() {
   const [characters, setCharacters] = useState([]);
   const [editingCharacter, setEditingCharacter] = useState(null);
@@ -295,8 +296,20 @@ function CharactersPage() {
               ))}
             </ul>
           )}
+          // Add this to the render method of CampaignsPage.js, just below the "Create New Campaign" button
+<button 
+  className="migrate-button"
+  onClick={async () => {
+    await migrateToFirestore();
+    alert('Migration to Firestore completed. Check the console for details.');
+  }}
+>
+  Migrate Data to Firestore
+</button>
         </div>
+        
       </div>
+    
     </div>
   );
 }
