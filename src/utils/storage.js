@@ -1,6 +1,6 @@
 // src/utils/storage.js
 import { db } from '../firebase';
-import { collection, getDocs, setDoc, doc, deleteDoc, query, where } from 'firebase/firestore';
+import { collection, getDocs, setDoc, doc, deleteDoc, query, where, getDoc } from 'firebase/firestore';
 import { saveMapData } from './storageExports';
 
 export const loadWorlds = async () => {
@@ -28,6 +28,15 @@ export const saveWorlds = async (worlds) => {
   }
 };
 
+export const deleteWorld = async (worldId) => {
+  try {
+    await deleteDoc(doc(db, 'worlds', worldId.toString()));
+  } catch (error) {
+    console.error('Error deleting world from Firestore:', error);
+    throw error;
+  }
+};
+
 export const loadWorldCampaigns = async (worldId) => {
   try {
     const campaignsQuery = query(
@@ -46,11 +55,38 @@ export const loadWorldCampaigns = async (worldId) => {
   }
 };
 
+export const loadCampaign = async (campaignId) => {
+  try {
+    const campaignDoc = await getDoc(doc(db, 'campaigns', campaignId.toString()));
+    if (campaignDoc.exists()) {
+      return {
+        id: campaignDoc.id,
+        ...campaignDoc.data()
+      };
+    } else {
+      console.error(`Campaign with ID ${campaignId} not found`);
+      return null;
+    }
+  } catch (error) {
+    console.error('Error loading campaign from Firestore:', error);
+    throw error;
+  }
+};
+
 export const saveCampaign = async (campaign) => {
   try {
     await setDoc(doc(db, 'campaigns', campaign.id.toString()), campaign);
   } catch (error) {
     console.error('Error saving campaign to Firestore:', error);
+    throw error;
+  }
+};
+
+export const deleteCampaign = async (campaignId) => {
+  try {
+    await deleteDoc(doc(db, 'campaigns', campaignId.toString()));
+  } catch (error) {
+    console.error('Error deleting campaign from Firestore:', error);
     throw error;
   }
 };
@@ -78,14 +114,32 @@ export const saveCharacter = async (character) => {
   }
 };
 
-export const deleteCampaign = async (campaignId) => {
+export const deleteCharacter = async (characterId) => {
   try {
-    await deleteDoc(doc(db, 'campaigns', campaignId.toString()));
+    await deleteDoc(doc(db, 'characters', characterId.toString()));
   } catch (error) {
-    console.error('Error deleting campaign from Firestore:', error);
+    console.error('Error deleting character from Firestore:', error);
+    throw error;
+  }
+};
+
+export const loadMapData = async (mapId) => {
+  try {
+    const mapDoc = await getDoc(doc(db, 'maps', mapId.toString()));
+    if (mapDoc.exists()) {
+      return {
+        id: mapDoc.id,
+        ...mapDoc.data()
+      };
+    } else {
+      console.error(`Map with ID ${mapId} not found`);
+      return null;
+    }
+  } catch (error) {
+    console.error('Error loading map data from Firestore:', error);
     throw error;
   }
 };
 
 // Export saveMapData
-export { saveMapData};
+export { saveMapData };
