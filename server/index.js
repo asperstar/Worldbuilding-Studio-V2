@@ -1,18 +1,36 @@
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
 const axios = require('axios');
-
 const app = express();
 const port = process.env.PORT || 3002;
 
-// Middleware
-app.use(cors({
-  origin: ['http://localhost:3000', 'https://worldbuilding-app-plum.vercel.app'],
+const cors = require('cors');
+
+const corsOptions = {
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
-  credentials: true
-}));
+  credentials: true,
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g., same-origin requests, Postman, curl)
+    if (!origin) return callback(null, true);
+
+    // Allow localhost for development
+    if (origin === 'http://localhost:3000') return callback(null, true);
+
+    // Allow any Vercel domain (e.g., *.vercel.app)
+    if (origin.endsWith('.vercel.app')) {
+      return callback(null, true);
+    }
+
+    // Reject all other origins
+    return callback(new Error('Not allowed by CORS'));
+  }
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
+
 
 // Increase the limit but not too much
 app.use(express.json({ 
