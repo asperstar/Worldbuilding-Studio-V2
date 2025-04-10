@@ -1,14 +1,13 @@
-/* eslint-disable no-unused-vars */
 import React, { useState, useEffect, useCallback } from 'react';
 import CharacterForm from '../components/characters/CharacterForm';
-import { saveCharacter, deleteCharacter } from '../utils/storageExports'; // Remove loadCharacters
+import { saveCharacter, deleteCharacter } from '../utils/storageExports';
 import { Link } from 'react-router-dom';
 import { trace } from 'firebase/performance';
 import { perf } from '../firebase';
-import { useStorage } from '../contexts/StorageContext'; // Add this import
+import { useStorage } from '../contexts/StorageContext';
 
 function CharactersPage() {
-  const { getAllCharacters } = useStorage(); // Add this
+  const { getAllCharacters } = useStorage();
   const [characters, setCharacters] = useState([]);
   const [editingCharacter, setEditingCharacter] = useState(null);
   const [storageStatus, setStorageStatus] = useState({ tested: false, working: false });
@@ -16,6 +15,9 @@ function CharactersPage() {
   const [filteredCharacters, setFilteredCharacters] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [page, setPage] = useState(1); // Add pagination state
+  const [hasMore, setHasMore] = useState(true); // Track if there are more characters to load
+  const pageSize = 10; // Number of characters per page
 
   // Test Firestore connectivity on component mount
   useEffect(() => {
@@ -34,16 +36,27 @@ function CharactersPage() {
     checkStorage();
   }, []);
 
-  // Load all characters using context
-  const loadCharacterData = useCallback(async () => {
+  // Load characters with pagination
+  const loadCharacterData = useCallback(async (pageNum) => {
     setIsLoading(true);
     setError(null);
     try {
       const t = trace(perf, 'load_characters');
       t.start();
-      const characterData = await getAllCharacters(); // Use context method
-      setCharacters(characterData || []);
-      setFilteredCharacters(characterData || []);
+      const allCharacters = await getAllCharacters();
+      const startIndex = (pageNum - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      const newCharacters = allCharacters.slice(startIndex, endIndex);
+
+      if (pageNum === 1) {
+        setCharacters(newCharacters);
+        setFilteredCharacters(newCharacters);
+      } else {
+        setCharacters(prev => [...prev, ...newCharacters]);
+        setFilteredCharacters(prev => [...prev, ...newCharacters]);
+      }
+
+      setHasMore(endIndex < allCharacters.length);
       t.stop();
     } catch (error) {
       console.error("Error loading characters:", error);
@@ -51,11 +64,11 @@ function CharactersPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [getAllCharacters]); // Add dependency
+  }, [getAllCharacters, pageSize]);
 
   useEffect(() => {
-    loadCharacterData();
-  }, [loadCharacterData]);
+    loadCharacterData(page);
+  }, [loadCharacterData, page]);
 
   // Filter characters based on search query
   useEffect(() => {
@@ -114,69 +127,55 @@ function CharactersPage() {
 
   const startEditing = (character) => {
     setEditingCharacter(character);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const cancelEditing = () => {
     setEditingCharacter(null);
   };
 
-  const handleDeleteCharacter = async (id) => {
-    if (window.confirm("Are you sure you want to delete this character?")) {
+  const handleDeleteCharacter = async (characterId) => {
+    if (window.confirm('Are you sure you want to delete this character?')) {
       try {
         setIsLoading(true);
-
-        // Delete from Firestore
-        await deleteCharacter(id);
-
-        // Update local state
-        if (editingCharacter && editingCharacter.id === id) {
-          setEditingCharacter(null);
-        }
-        setCharacters(prevChars => prevChars.filter(char => char.id !== id));
+        setError(null);
+        await deleteCharacter(characterId);
+        setCharacters(prevChars => prevChars.filter(char => char.id !== characterId));
       } catch (error) {
         console.error("Error deleting character:", error);
-        setError("Failed to delete character. Please try again.");
+        setError(`Failed to delete character: ${error.message}`);
       } finally {
         setIsLoading(false);
       }
     }
   };
 
-  // Add bulk save functionality
-  const handleBulkSave = async () => {
-    if (!characters.length) return;
-
+  const handleBulkSave = async (updatedCharacters) => {
     try {
       setIsLoading(true);
-      await saveCharacters(characters);
       setError(null);
+      await saveCharacters(updatedCharacters);
+      setCharacters(updatedCharacters);
     } catch (error) {
-      console.error("Error saving all characters:", error);
-      setError("Failed to save all characters. Please try again.");
+      console.error("Error bulk saving characters:", error);
+      setError(`Failed to bulk save characters: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // UI rendering with loading and error states
+  const loadMoreCharacters = () => {
+    setPage(prev => prev + 1);
+  };
+
   return (
     <div className="characters-page">
       <h1>Characters</h1>
-
+      {error && <div className="error-message">{error}</div>}
       {!storageStatus.working && storageStatus.tested && (
-        <div className="storage-warning">
-          <p>Warning: Unable to connect to Firestore. Your characters won't be saved.</p>
+        <div className="warning-message">
+          Warning: Unable to connect to Firestore. Your characters won't be saved.
         </div>
       )}
-
-      {error && (
-        <div className="error-message">
-          <p>{error}</p>
-          <button onClick={loadCharacterData}>Try Again</button>
-        </div>
-      )}
-
       <div className="page-content">
         <div className="form-section">
           <h2>{editingCharacter ? 'Edit Character' : 'Create New Character'}</h2>
@@ -185,34 +184,21 @@ function CharactersPage() {
             initialCharacter={editingCharacter}
             onCancel={cancelEditing}
             isEditing={!!editingCharacter}
-            isSubmitting={isLoading}
           />
         </div>
-
         <div className="characters-list">
           <div className="list-header">
             <h2>Your Characters ({characters.length})</h2>
-            <div className="search-characters">
-              <input
-                type="text"
-                placeholder="Search characters..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="search-input"
-              />
-              {searchQuery && (
-                <button
-                  className="clear-search"
-                  onClick={() => setSearchQuery('')}
-                >
-                  ×
-                </button>
-              )}
-            </div>
+            <input
+              type="text"
+              placeholder="Search characters..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="search-input"
+            />
           </div>
-
-          {isLoading && characters.length === 0 ? (
-            <div className="loading-indicator">Loading characters...</div>
+          {isLoading && page === 1 ? (
+            <div>Loading characters...</div>
           ) : filteredCharacters.length === 0 ? (
             searchQuery ? (
               <p className="no-results">No characters found matching "{searchQuery}"</p>
@@ -220,71 +206,74 @@ function CharactersPage() {
               <p className="no-characters">No characters created yet.</p>
             )
           ) : (
-            <ul className="character-cards">
-              {filteredCharacters.map(char => (
-                <li key={char.id} className="character-card">
-                  <div className="card-header">
-                    {char.imageUrl ? (
-                      <div className="character-image">
-                        <img src={char.imageUrl} alt={char.name} />
-                      </div>
-                    ) : (
-                      <div className="character-initial">
-                        {char.name ? char.name[0].toUpperCase() : '?'}
-                      </div>
-                    )}
-                    <h3>{char.name}</h3>
-                  </div>
-
-                  <div className="card-content">
-                    {char.traits && <p className="traits"><strong>Traits:</strong> {char.traits}</p>}
-                    {char.personality && <p className="personality"><strong>Personality:</strong> {char.personality}</p>}
-                    {char.background && (
-                      <p className="background">
-                        <strong>Background:</strong>
-                        {(char.background || '').length > 100
-                          ? `${(char.background || '').substring(0, 100)}...`
-                          : char.background || ''
-                        }
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="card-actions">
-                    <button
-                      onClick={() => startEditing(char)}
-                      className="edit-button"
-                      disabled={isLoading}
-                    >
-                      Edit
-                    </button>
-                    <Link
-                      to={`/characters/${char.id}/memories`}
-                      className="memories-button"
-                    >
-                      Memories
-                    </Link>
-                    <button
-                      onClick={() => handleDeleteCharacter(char.id)}
-                      className="delete-button"
-                      disabled={isLoading}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="character-cards">
+                {filteredCharacters.map(char => (
+                  <li key={char.id} className="character-card">
+                    <div className="card-header">
+                      {char.imageUrl ? (
+                        <div className="character-image">
+                          <img src={char.imageUrl} alt={char.name} />
+                        </div>
+                      ) : (
+                        <div className="character-icon">
+                          <span className="icon-text">{char.name ? char.name[0].toUpperCase() : 'C'}</span>
+                        </div>
+                      )}
+                      <h3>{char.name || 'Unnamed Character'}</h3>
+                    </div>
+                    <div className="card-content">
+                      {char.personality && (
+                        <p className="personality">
+                          <strong>Personality:</strong> {char.personality}
+                        </p>
+                      )}
+                      {char.background && (
+                        <p className="background">
+                          <strong>Background:</strong>{' '}
+                          {char.background.length > 100
+                            ? `${char.background.substring(0, 100)}...`
+                            : char.background}
+                        </p>
+                      )}
+                    </div>
+                    <div className="card-actions">
+                      <Link to={`/chat?characterId=${char.id}`}>
+                        <button className="chat-button">Chat</button>
+                      </Link>
+                      <button
+                        className="edit-button"
+                        onClick={() => startEditing(char)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="memories-button"
+                        onClick={() => alert('Memories feature coming soon!')}
+                      >
+                        Memories
+                      </button>
+                      <button
+                        className="delete-button"
+                        onClick={() => handleDeleteCharacter(char.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {hasMore && (
+                <button
+                  onClick={loadMoreCharacters}
+                  disabled={isLoading}
+                  className="load-more-button"
+                >
+                  {isLoading ? 'Loading...' : 'Load More'}
+                </button>
+              )}
+            </>
           )}
-          <button
-            className="migrate-button"
-            onClick={async () => {
-              await migrateToFirestore();
-              alert('Migration to Firestore completed. Check the console for details.');
-            }}
-          >
-            Migrate Data to Firestore
-          </button>
         </div>
       </div>
     </div>

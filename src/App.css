@@ -4279,3 +4279,239 @@ tr:hover {
   border: 1px solid #ccc;
   border-radius: 4px;
 }
+
+.load-more-button {
+  display: block;
+  margin: 20px auto;
+  padding: 10px 20px;
+  background-color: #4a90e2;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.load-more-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+.app-container {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  background-color: #1a1a1a;
+  color: white;
+  width: 200px;
+  padding: 20px;
+  transition: transform 0.3s ease-in-out;
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100%;
+  z-index: 1000;
+}
+
+.sidebar.closed {
+  transform: translateX(-100%);
+}
+
+.sidebar.open {
+  transform: translateX(0);
+}
+
+.sidebar-menu {
+  list-style: none;
+  padding: 0;
+}
+
+.sidebar-menu li {
+  margin: 20px 0;
+}
+
+.sidebar-menu a {
+  color: white;
+  text-decoration: none;
+  font-size: 16px;
+}
+
+.sidebar-menu a:hover {
+  color: #4a90e2;
+}
+
+.main-content {
+  flex: 1;
+  padding: 20px;
+  transition: margin-left 0.3s ease-in-out;
+}
+
+.main-content.sidebar-open {
+  margin-left: 200px;
+}
+
+.main-content.sidebar-closed {
+  margin-left: 0;
+}
+
+.sidebar-toggle-button {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 1100;
+  background-color: #4a90e2;
+  color: white;
+  border: none;
+  padding: 10px;
+  font-size: 20px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+/* Ensure the button is visible on mobile */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 200px;
+  }
+
+  .main-content.sidebar-open {
+    margin-left: 0;
+  }
+
+  .main-content.sidebar-closed {
+    margin-left: 0;
+  }
+}
+/* src/styles/ForgotPasswordPage.css */
+.forgot-password-page {
+  max-width: 400px;
+  margin: 50px auto;
+  padding: 20px;
+  background-color: #2a2a2a;
+  border-radius: 8px;
+  color: white;
+}
+
+.forgot-password-page h1 {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.forgot-password-page p {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.forgot-password-page form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  margin-bottom: 5px;
+}
+
+.form-group input {
+  padding: 8px;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background-color: #333;
+  color: white;
+}
+
+.forgot-password-page button {
+  padding: 10px;
+  background-color: #4a90e2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.forgot-password-page button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.success-message {
+  margin-top: 15px;
+  padding: 10px;
+  background-color: #28a745;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.error-message {
+  margin-top: 15px;
+  padding: 10px;
+  background-color: #dc3545;
+  border-radius: 4px;
+  text-align: center;
+}
+
+/* src/styles/LoginPage.css */
+.login-page {
+  max-width: 400px;
+  margin: 50px auto;
+  padding: 20px;
+  background-color: #2a2a2a;
+  border-radius: 8px;
+  color: white;
+}
+
+.login-page h1 {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.login-page form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  margin-bottom: 5px;
+}
+
+.form-group input {
+  padding: 8px;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background-color: #333;
+  color: white;
+}
+
+.login-page button {
+  padding: 10px;
+  background-color: #4a90e2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.login-page button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.error-message {
+  margin-top: 15px;
+  padding: 10px;
+  background-color: #dc3545;
+  border-radius: 4px;
+  text-align: center;
+}

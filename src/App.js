@@ -1,14 +1,12 @@
-// src/App.js
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './utils/firebase';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { StorageProvider } from './contexts/StorageContext';
+import { Link } from 'react-router-dom';
 import './App.css';
 
-// Import components
-import SidebarNavigation from './components/SidebarNavigation';
-import AzgaarMapIframe from './components/maps/AzgaarMapIframe'; // Updated import
+// Import components and pages
 import Dashboard from './pages/Dashboard';
 import CharactersPage from './pages/CharactersPage';
 import EnvironmentsPage from './pages/EnvironmentsPage';
@@ -27,12 +25,17 @@ import AuthPage from './pages/AuthPage';
 import ProfilePage from './pages/ProfilePage';
 import DocumentationPage from './pages/DocumentationPage';
 import DebugPage from './pages/DebugPage';
-import DebugEnv from './DebugEnv';
 import DecorativeElements from './components/DecorativeElements';
+import AzgaarMapIframe from './components/maps/AzgaarMapIframe';
 
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  
+  const toggleSidebar = () => {
+    setIsSidebarOpen(!isSidebarOpen);
+  };
 
   useEffect(() => {
     if (!auth) {
@@ -40,12 +43,12 @@ function App() {
       setLoading(false);
       return;
     }
-
+    
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setLoading(false);
     });
-
+    
     return () => unsubscribe();
   }, []);
 
@@ -62,12 +65,39 @@ function App() {
     <StorageProvider>
       <HashRouter>
         <div className="app">
-          <DebugEnv />
           {user ? (
             <>
               <DecorativeElements />
-              <SidebarNavigation />
-              <main className="main-content main-content-with-sidebar">
+              
+              {/* Toggle Button */}
+              <button 
+                className="sidebar-toggle-button" 
+                onClick={toggleSidebar}
+                aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+              >
+                {isSidebarOpen ? '✖' : '☰'}
+              </button>
+              
+              {/* Sidebar Navigation */}
+              <nav className={`sidebar ${isSidebarOpen ? 'open' : 'closed'}`}>
+                <h1>Worldbuilding Studio</h1>
+                <ul className="sidebar-menu">
+                  <li><Link to="/" onClick={() => setIsSidebarOpen(false)}>Dashboard</Link></li>
+                  <li><Link to="/characters" onClick={() => setIsSidebarOpen(false)}>Characters</Link></li>
+                  <li><Link to="/environments" onClick={() => setIsSidebarOpen(false)}>Environments</Link></li>
+                  <li><Link to="/map" onClick={() => setIsSidebarOpen(false)}>Map</Link></li>
+                  <li><Link to="/timeline" onClick={() => setIsSidebarOpen(false)}>Timeline</Link></li>
+                  <li><Link to="/chat" onClick={() => setIsSidebarOpen(false)}>Character Chat</Link></li>
+                  <li><Link to="/worlds" onClick={() => setIsSidebarOpen(false)}>Worlds</Link></li>
+                  <li><Link to="/campaigns" onClick={() => setIsSidebarOpen(false)}>Campaign</Link></li>
+                  <li><Link to="/import-export" onClick={() => setIsSidebarOpen(false)}>Import/Export</Link></li>
+                  <li><Link to="/profile" onClick={() => setIsSidebarOpen(false)}>Profile</Link></li>
+                  <li><Link to="/documentation" onClick={() => setIsSidebarOpen(false)}>Documentation</Link></li>
+                </ul>
+              </nav>
+              
+              {/* Main Content */}
+              <main className={`main-content ${isSidebarOpen ? 'main-content-with-sidebar' : 'main-content-full'}`}>
                 <ErrorSuppressor>
                   <Routes>
                     <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
@@ -83,7 +113,7 @@ function App() {
                     <Route path="/worlds/:worldId/campaigns" element={<ProtectedRoute><CampaignsPage /></ProtectedRoute>} />
                     <Route path="/campaigns/:campaignId/session" element={<ProtectedRoute><CampaignSessionPage /></ProtectedRoute>} />
                     <Route path="/campaigns" element={<ProtectedRoute><CampaignsIndexPage /></ProtectedRoute>} />
-                    <Route path="/worlds/:worldId/map/fantasy" element={<ProtectedRoute><AzgaarMapIframe /></ProtectedRoute>} /> {/* Updated component */}
+                    <Route path="/worlds/:worldId/map/fantasy" element={<ProtectedRoute><AzgaarMapIframe /></ProtectedRoute>} /> 
                     <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
                     <Route path="/documentation" element={<ProtectedRoute><DocumentationPage /></ProtectedRoute>} />
                     <Route path="/debug" element={<ProtectedRoute><DebugPage /></ProtectedRoute>} />
@@ -100,6 +130,7 @@ function App() {
   );
 }
 
+// Suppress ResizeObserver errors
 if (typeof window !== 'undefined') {
   const originalError = console.error;
   console.error = (...args) => {

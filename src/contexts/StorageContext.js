@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { auth } from '../firebase';
-import { onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 
 import { 
   loadCharacters, 
@@ -147,6 +147,28 @@ export function StorageProvider({ children }) {
       return true;
     } catch (error) {
       setError(`Logout error: ${error.message}`);
+      return false;
+    }
+  };
+
+  const sendPasswordReset = async (email) => {
+    try {
+      setError(null);
+      await sendPasswordResetEmail(auth, email);
+      return true;
+    } catch (error) {
+      let errorMessage = "Failed to send password reset email";
+      switch (error.code) {
+        case 'auth/invalid-email':
+          errorMessage = 'Invalid email address format.';
+          break;
+        case 'auth/user-not-found':
+          errorMessage = 'No account found with this email.';
+          break;
+        default:
+          errorMessage = error.message || "Failed to send password reset email";
+      }
+      setError(errorMessage);
       return false;
     }
   };
@@ -470,6 +492,7 @@ export function StorageProvider({ children }) {
     login,
     signup,
     logout,
+    sendPasswordReset, // Add the new method
     getCharacters,
     getAllCharacters,
     saveAllCharacters,
@@ -485,7 +508,7 @@ export function StorageProvider({ children }) {
     updateTimelineData,
     getCampaign,
     updateCampaign,
-    getWorldCampaigns // Already correct, no changes needed here
+    getWorldCampaigns
   };
 
   return (
