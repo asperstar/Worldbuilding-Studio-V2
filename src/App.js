@@ -27,6 +27,7 @@ import DocumentationPage from './pages/DocumentationPage';
 import DebugPage from './pages/DebugPage';
 import DecorativeElements from './components/DecorativeElements';
 import AzgaarMapIframe from './components/maps/AzgaarMapIframe';
+import LoginPage from 'pages/LoginPage';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -101,7 +102,7 @@ function App() {
                 <ErrorSuppressor>
                   <Routes>
                     <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-                    <Route path="/login" element={<AuthPage />} />
+                    <Route path="/login" element={<LoginPage />} />
                     <Route path="/characters" element={<ProtectedRoute><CharactersPage /></ProtectedRoute>} />
                     <Route path="/characters/:characterId/memories" element={<ProtectedRoute><CharacterMemoriesPage /></ProtectedRoute>} />
                     <Route path="/environments" element={<ProtectedRoute><EnvironmentsPage /></ProtectedRoute>} />

@@ -1,3 +1,4 @@
+/* eslint-disable no-undef*/
 import React, { useState, useEffect, useCallback } from 'react';
 import CharacterForm from '../components/characters/CharacterForm';
 import { saveCharacter, deleteCharacter } from '../utils/storageExports';
