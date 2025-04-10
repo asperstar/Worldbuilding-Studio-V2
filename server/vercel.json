@@ -5,10 +5,10 @@
         "maxDuration": 10
       }
     },
-    "rewrites": [
+    "routes": [
       {
-        "source": "/(.*)",
-        "destination": "/index.js"
+        "src": "/(.*)",
+        "dest": "/index.js"
       }
     ]
   }
