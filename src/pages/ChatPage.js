@@ -1,15 +1,13 @@
-// src/pages/ChatPage.js
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { loadCharacters } from '../utils/storage';
+import { useStorage } from '../contexts/StorageContext'; // Add this import
 
-
-// Use a relative URL to leverage the proxy in development
 const API_URL = process.env.NODE_ENV === 'production'
   ? 'https://my-backend-jet-two.vercel.app'
-  : 'http://localhost:3002'; // Directly point to your backend
+  : 'http://localhost:3002';
 
 function ChatPage() {
+  const { getAllCharacters } = useStorage(); // Add this
   const [characters, setCharacters] = useState([]);
   const [selectedCharacter, setSelectedCharacter] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -18,18 +16,18 @@ function ChatPage() {
   const [error, setError] = useState(null);
   const messagesEndRef = useRef(null);
 
-  // Load characters on mount
+  // Load all characters using context
   useEffect(() => {
     const fetchCharacters = async () => {
       try {
-        const loadedCharacters = await loadCharacters();
-        setCharacters(loadedCharacters);
+        const loadedCharacters = await getAllCharacters(); // Use context method
+        setCharacters(loadedCharacters || []);
       } catch (err) {
         setError('Failed to load characters: ' + err.message);
       }
     };
     fetchCharacters();
-  }, []);
+  }, [getAllCharacters]); // Add dependency
 
   // Scroll to the bottom of the chat when messages change
   useEffect(() => {

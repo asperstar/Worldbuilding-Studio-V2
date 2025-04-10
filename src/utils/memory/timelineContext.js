@@ -211,7 +211,7 @@ export const getFilteredEvents = (events, filters = {}) => {
   
   // src/components/timeline/TimelineContextGenerator.js
   import React, { useState, useEffect } from 'react';
-  import { loadTimelineData, loadCharacters, loadEnvironments, loadWorlds } from '../../utils/storage';
+  import { loadTimelineData, loadCharacters, loadEnvironments, loadWorlds } from '../../utils/storageExports';
   import { formatTimelineForAI, createTimelineNarrative, getFilteredEvents } from '../../utils/memory/timelineContext';
   
   function TimelineContextGenerator() {

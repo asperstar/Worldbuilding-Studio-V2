@@ -1,4 +1,3 @@
-// src/contexts/StorageContext.js
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { auth } from '../firebase';
 import { onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
@@ -40,12 +39,10 @@ export function StorageProvider({ children }) {
   });
 
   useEffect(() => {
-    // Listen for auth state changes
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setIsLoading(false);
       
-      // Test Firestore connection whenever auth state changes
       if (user) {
         testFirebaseConnection();
       }
@@ -54,7 +51,6 @@ export function StorageProvider({ children }) {
     return unsubscribe;
   }, []);
   
-  // Test Firebase connection
   const testFirebaseConnection = async () => {
     try {
       const result = await testStorage();
@@ -79,20 +75,14 @@ export function StorageProvider({ children }) {
     }
   };
 
-  // Auth functions
   const login = async (email, password) => {
     try {
       setError(null);
       await signInWithEmailAndPassword(auth, email, password);
-      
-      // Test connection after login
       await testFirebaseConnection();
-      
       return true;
     } catch (error) {
       let errorMessage = "Authentication failed";
-      
-      // User-friendly error messages
       switch(error.code) {
         case 'auth/invalid-email':
           errorMessage = 'Invalid email address format.';
@@ -109,7 +99,6 @@ export function StorageProvider({ children }) {
         default:
           errorMessage = error.message || "Authentication failed";
       }
-      
       setError(errorMessage);
       return false;
     }
@@ -119,15 +108,10 @@ export function StorageProvider({ children }) {
     try {
       setError(null);
       await createUserWithEmailAndPassword(auth, email, password);
-      
-      // Test connection after signup
       await testFirebaseConnection();
-      
       return true;
     } catch (error) {
       let errorMessage = "Registration failed";
-      
-      // User-friendly error messages
       switch(error.code) {
         case 'auth/email-already-in-use':
           errorMessage = 'This email is already in use.';
@@ -141,7 +125,6 @@ export function StorageProvider({ children }) {
         default:
           errorMessage = error.message || "Registration failed";
       }
-      
       setError(errorMessage);
       return false;
     }
@@ -151,8 +134,6 @@ export function StorageProvider({ children }) {
     try {
       setError(null);
       await signOut(auth);
-      
-      // Clear cached data on logout
       setCachedData({
         characters: null,
         environments: null,
@@ -163,7 +144,6 @@ export function StorageProvider({ children }) {
           worlds: null
         }
       });
-      
       return true;
     } catch (error) {
       setError(`Logout error: ${error.message}`);
@@ -171,13 +151,11 @@ export function StorageProvider({ children }) {
     }
   };
 
-  // Character functions
-  const getCharacters = async (forceRefresh = false) => {
+  const getCharacters = async (projectId, forceRefresh = false) => {
     if (!currentUser) return [];
     
-    // Check cache first
     const now = new Date();
-    const cacheExpiry = 5 * 60 * 1000; // 5 minutes
+    const cacheExpiry = 5 * 60 * 1000;
     
     if (!forceRefresh && 
         cachedData.characters && 
@@ -187,10 +165,8 @@ export function StorageProvider({ children }) {
     }
     
     try {
-      // Fetch from Firestore
-      const characters = await loadCharacters();
+      const characters = await loadCharacters(currentUser.uid, projectId || null);
       
-      // Update cache
       setCachedData(prev => ({
         ...prev,
         characters,
@@ -206,16 +182,18 @@ export function StorageProvider({ children }) {
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
       }
-      throw error;
+      return [];
     }
+  };
+
+  const getAllCharacters = async (forceRefresh = false) => {
+    return getCharacters(null, forceRefresh);
   };
 
   const saveAllCharacters = async (characters) => {
     if (!currentUser) return false;
     try {
       await saveCharacters(characters);
-      
-      // Update cache
       setCachedData(prev => ({
         ...prev,
         characters,
@@ -224,14 +202,13 @@ export function StorageProvider({ children }) {
           characters: new Date()
         }
       }));
-      
       return true;
     } catch (error) {
       console.error("Error saving characters:", error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
       }
-      throw error;
+      return false;
     }
   };
 
@@ -239,18 +216,14 @@ export function StorageProvider({ children }) {
     if (!currentUser) return false;
     try {
       await saveCharacter(character);
-      
-      // Update the cache if it exists
       if (cachedData.characters) {
         const updatedCharacters = [...cachedData.characters];
         const index = updatedCharacters.findIndex(c => c.id === character.id);
-        
         if (index >= 0) {
           updatedCharacters[index] = character;
         } else {
           updatedCharacters.push(character);
         }
-        
         setCachedData(prev => ({
           ...prev,
           characters: updatedCharacters,
@@ -260,14 +233,13 @@ export function StorageProvider({ children }) {
           }
         }));
       }
-      
       return true;
     } catch (error) {
       console.error("Error saving character:", error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
       }
-      throw error;
+      return false;
     }
   };
 
@@ -275,8 +247,6 @@ export function StorageProvider({ children }) {
     if (!currentUser) return false;
     try {
       await deleteCharacter(characterId);
-      
-      // Update cache if it exists
       if (cachedData.characters) {
         setCachedData(prev => ({
           ...prev,
@@ -287,22 +257,19 @@ export function StorageProvider({ children }) {
           }
         }));
       }
-      
       return true;
     } catch (error) {
       console.error("Error deleting character:", error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
       }
-      throw error;
+      return false;
     }
   };
 
-  // Environment functions
-  const getEnvironments = async (forceRefresh = false) => {
+  const getEnvironments = async (projectId, forceRefresh = false) => {
     if (!currentUser) return [];
     
-    // Similar cache logic as characters
     const now = new Date();
     const cacheExpiry = 5 * 60 * 1000;
     
@@ -314,7 +281,7 @@ export function StorageProvider({ children }) {
     }
     
     try {
-      const environments = await loadEnvironments();
+      const environments = await loadEnvironments(currentUser.uid, projectId || null);
       
       setCachedData(prev => ({
         ...prev,
@@ -331,15 +298,18 @@ export function StorageProvider({ children }) {
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
       }
-      throw error;
+      return [];
     }
+  };
+
+  const getAllEnvironments = async (forceRefresh = false) => {
+    return getEnvironments(null, forceRefresh);
   };
 
   const saveAllEnvironments = async (environments) => {
     if (!currentUser) return false;
     try {
       await saveEnvironments(environments);
-      
       setCachedData(prev => ({
         ...prev,
         environments,
@@ -348,22 +318,19 @@ export function StorageProvider({ children }) {
           environments: new Date()
         }
       }));
-      
       return true;
     } catch (error) {
       console.error("Error saving environments:", error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
       }
-      throw error;
+      return false;
     }
   };
 
-  // World functions
   const getWorlds = async (forceRefresh = false) => {
     if (!currentUser) return [];
     
-    // Cache check
     const now = new Date();
     const cacheExpiry = 5 * 60 * 1000;
     
@@ -376,7 +343,6 @@ export function StorageProvider({ children }) {
     
     try {
       const worlds = await loadWorlds();
-      
       setCachedData(prev => ({
         ...prev,
         worlds,
@@ -385,29 +351,29 @@ export function StorageProvider({ children }) {
           worlds: now
         }
       }));
-      
       return worlds;
     } catch (error) {
       console.error("Error fetching worlds:", error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
       }
-      throw error;
+      return [];
     }
   };
 
-  // Map data functions
   const getMapData = async () => {
     if (!currentUser) return { nodes: [], edges: [] };
     
     try {
-      return await loadMapData();
+      const mapData = await loadMapData();
+      console.log('Map data fetched in getMapData:', mapData);
+      return mapData;
     } catch (error) {
       console.error("Error loading map data:", error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
       }
-      throw error;
+      return { nodes: [], edges: [], imageUrl: '' };
     }
   };
 
@@ -421,11 +387,10 @@ export function StorageProvider({ children }) {
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
       }
-      throw error;
+      return false;
     }
   };
 
-  // Timeline functions
   const getTimelineData = async () => {
     if (!currentUser) return { events: [], sequences: ['Main Timeline'] };
     
@@ -436,7 +401,7 @@ export function StorageProvider({ children }) {
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
       }
-      throw error;
+      return { events: [], sequences: ['Main Timeline'] };
     }
   };
 
@@ -450,11 +415,10 @@ export function StorageProvider({ children }) {
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
       }
-      throw error;
+      return false;
     }
   };
 
-  // Campaign functions
   const getCampaign = async (campaignId) => {
     if (!currentUser) return null;
     
@@ -465,7 +429,7 @@ export function StorageProvider({ children }) {
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
       }
-      throw error;
+      return null;
     }
   };
 
@@ -479,7 +443,7 @@ export function StorageProvider({ children }) {
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
       }
-      throw error;
+      return false;
     }
   };
 
@@ -493,11 +457,10 @@ export function StorageProvider({ children }) {
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
       }
-      throw error;
+      return [];
     }
   };
 
-  // Provide all functionality through the context
   const value = {
     currentUser,
     isLoading,
@@ -508,10 +471,12 @@ export function StorageProvider({ children }) {
     signup,
     logout,
     getCharacters,
+    getAllCharacters,
     saveAllCharacters,
     saveOneCharacter,
     removeCharacter,
     getEnvironments,
+    getAllEnvironments,
     saveAllEnvironments,
     getWorlds,
     getMapData,
@@ -520,7 +485,7 @@ export function StorageProvider({ children }) {
     updateTimelineData,
     getCampaign,
     updateCampaign,
-    getWorldCampaigns
+    getWorldCampaigns // Already correct, no changes needed here
   };
 
   return (

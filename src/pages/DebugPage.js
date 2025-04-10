@@ -1,6 +1,6 @@
 // src/pages/DebugPage.js
 import React, { useState } from 'react';
-import { testStorage } from '../utils/storage';
+import { testStorage } from '../utils/storageExports';
 
 function DebugPage() {
   const [result, setResult] = useState(null);

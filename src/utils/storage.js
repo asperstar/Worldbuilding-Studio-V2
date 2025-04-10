@@ -1,17 +1,26 @@
-// src/utils/storage.js
+// src/utils/storageExports.js
 import { db } from '../firebase';
 import { collection, getDocs, setDoc, doc, deleteDoc, query, where, getDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 const auth = getAuth();
 
-// Helper function to ensure user is authenticated
-const ensureAuthenticated = () => {
-  const user = auth.currentUser;
-  if (!user) {
-    throw new Error('User not authenticated');
+// Enhanced version with retry
+const ensureAuthenticated = async (retries = 3) => {
+  for (let i = 0; i < retries; i++) {
+    const user = auth.currentUser;
+    if (user) {
+      return user;
+    }
+    
+    // If no user and we have retries left, wait a bit
+    if (i < retries - 1) {
+      console.log(`Auth not ready, retry ${i+1}/${retries}...`);
+      await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms
+    }
   }
-  return user;
+  
+  throw new Error('User not authenticated after retries');
 };
 
 // World functions
@@ -191,23 +200,6 @@ export const deleteCampaign = async (campaignId, userId = null) => {
 };
 
 // Character functions
-export const loadCharacters = async (userId = null) => {
-  try {
-    const user = ensureAuthenticated();
-    const userIdToUse = userId || user.uid;
-    
-    const charactersQuery = query(collection(db, 'characters'), where('userId', '==', userIdToUse));
-    const charactersSnapshot = await getDocs(charactersQuery);
-    const characters = charactersSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-    return characters;
-  } catch (error) {
-    console.error('Error loading characters from Firestore:', error);
-    throw error;
-  }
-};
 
 export const loadCharacter = async (characterId, userId = null) => {
   try {
@@ -282,24 +274,7 @@ export const deleteCharacter = async (characterId, userId = null) => {
   }
 };
 
-// Environment functions
-export const loadEnvironments = async (userId = null) => {
-  try {
-    const user = ensureAuthenticated();
-    const userIdToUse = userId || user.uid;
-    
-    const environmentsQuery = query(collection(db, 'environments'), where('userId', '==', userIdToUse));
-    const environmentsSnapshot = await getDocs(environmentsQuery);
-    const environments = environmentsSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-    return environments;
-  } catch (error) {
-    console.error('Error loading environments from Firestore:', error);
-    throw error;
-  }
-};
+
 
 export const saveEnvironments = async (environments, userId = null) => {
   try {
@@ -500,7 +475,69 @@ export const importAllData = async (data, userId = null) => {
     throw error;
   }
 };
+export const loadCharacters = async (userId = null, projectId = null) => {
+  try {
+    const user = await ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
+    if (!projectId) {
+      console.error('projectId is undefined in loadCharacters');
+      return [];
+    }
+    
+    const charactersQuery = query(
+      collection(db, 'characters'),
+      where('userId', '==', userIdToUse),
+      where('projectId', '==', projectId) // Add projectId to the query
+    );
+    const charactersSnapshot = await getDocs(charactersQuery);
+    
+    if (!charactersSnapshot || !charactersSnapshot.docs) {
+      console.warn('No valid snapshot or docs returned');
+      return [];
+    }
+    
+    const characters = charactersSnapshot.docs.map(doc => {
+      const data = doc.data() || {};
+      return {
+        id: doc.id,
+        ...data
+      };
+    }).filter(char => char);
+    
+    return characters;
+  } catch (error) {
+    console.error('Error loading characters from Firestore:', error);
+    return [];
+  }
+};
 
+export const loadEnvironments = async (userId = null, projectId = null) => {
+  try {
+    const user = await ensureAuthenticated();
+    const userIdToUse = userId || user.uid;
+    
+    if (!projectId) {
+      console.error('projectId is undefined in loadEnvironments');
+      return [];
+    }
+    
+    const environmentsQuery = query(
+      collection(db, 'environments'),
+      where('userId', '==', userIdToUse),
+      where('projectId', '==', projectId) // Add projectId to the query
+    );
+    const environmentsSnapshot = await getDocs(environmentsQuery);
+    const environments = environmentsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    return environments;
+  } catch (error) {
+    console.error('Error loading environments from Firestore:', error);
+    throw error;
+  }
+};
 // Test connection function
 export const testStorage = async () => {
   try {

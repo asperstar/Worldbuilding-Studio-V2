@@ -1,7 +1,7 @@
 // src/pages/CampaignsIndexPage.js
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { loadWorlds } from '../utils/storage';
+import { loadWorlds } from '../utils/storageExports';
 
 function CampaignsIndexPage() {
   const [worlds, setWorlds] = useState([]);

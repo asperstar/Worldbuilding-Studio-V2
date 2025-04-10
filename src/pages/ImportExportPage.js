@@ -1,17 +1,9 @@
-// src/pages/ImportExportPage.js
 import React, { useState, useEffect } from 'react';
-import { 
-  exportAllData, 
-  importAllData, 
-  loadCharacters, 
-  loadEnvironments, 
-  loadWorlds, 
-  loadMapData, 
-  loadTimelineData,
-  loadCampaigns
-} from '../utils/storage';
+import { exportAllData, importAllData } from '../utils/storageExports';
+import { useStorage } from '../contexts/StorageContext';
 
 function ImportExportPage() {
+  const { getAllCharacters, getAllEnvironments, getWorlds, getMapData, getTimelineData, getWorldCampaigns } = useStorage();
   const [importStatus, setImportStatus] = useState(null);
   const [exportStatus, setExportStatus] = useState(null);
   const [exportStats, setExportStats] = useState(null);
@@ -34,22 +26,28 @@ function ImportExportPage() {
     timelineEvents: 0
   });
   
-  // Load existing data counts on mount
+  // Load existing data counts on mount using context
   useEffect(() => {
     const loadDataCounts = async () => {
       try {
-        const characters = await loadCharacters();
-        const environments = await loadEnvironments();
-        const worlds = await loadWorlds();
-        const mapData = await loadMapData();
-        const timelineData = await loadTimelineData();
-        const campaigns = await loadCampaigns() || [];
+        const characters = await getAllCharacters();
+        const environments = await getAllEnvironments();
+        const worlds = await getWorlds();
+        const mapData = await getMapData();
+        const timelineData = await getTimelineData();
+
+        // Fetch campaigns for all worlds
+        let allCampaigns = [];
+        for (const world of worlds) {
+          const worldCampaigns = await getWorldCampaigns(world.id);
+          allCampaigns = [...allCampaigns, ...worldCampaigns];
+        }
         
         setExistingData({
           characters: characters.length,
           environments: environments.length,
           worlds: worlds.length,
-          campaigns: campaigns.length,
+          campaigns: allCampaigns.length,
           mapNodes: (mapData?.nodes?.length || 0) + (mapData?.edges?.length || 0),
           timelineEvents: timelineData?.events?.length || 0
         });
@@ -59,7 +57,7 @@ function ImportExportPage() {
     };
     
     loadDataCounts();
-  }, []);
+  }, [getAllCharacters, getAllEnvironments, getWorlds, getMapData, getTimelineData, getWorldCampaigns]);
   
   const handleOptionsChange = (e) => {
     const { name, checked } = e.target;
@@ -74,7 +72,6 @@ function ImportExportPage() {
       setExportStatus('processing');
       const exportData = await exportAllData(selectedOptions);
       
-      // Set stats about what was exported
       setExportStats({
         characters: exportData.characters?.length || 0,
         environments: exportData.environments?.length || 0,
@@ -86,12 +83,10 @@ function ImportExportPage() {
         memories: Object.keys(exportData.memories || {}).length
       });
       
-      // Create a download link
       const dataStr = JSON.stringify(exportData, null, 2);
       const dataBlob = new Blob([dataStr], { type: 'application/json' });
       const url = URL.createObjectURL(dataBlob);
       
-      // Create and click a download link
       const a = document.createElement('a');
       a.setAttribute('hidden', '');
       a.setAttribute('href', url);
@@ -102,7 +97,6 @@ function ImportExportPage() {
       
       setExportStatus('success');
       
-      // Clear status after a delay
       setTimeout(() => setExportStatus(null), 5000);
     } catch (error) {
       console.error('Export error:', error);
@@ -121,7 +115,6 @@ function ImportExportPage() {
       try {
         const importData = JSON.parse(e.target.result);
         
-        // Filter import data based on selected options
         const filteredData = {};
         if (selectedOptions.characters && importData.characters) filteredData.characters = importData.characters;
         if (selectedOptions.environments && importData.environments) filteredData.environments = importData.environments;
@@ -132,15 +125,12 @@ function ImportExportPage() {
         if (selectedOptions.memories && importData.memories) filteredData.memories = importData.memories;
         if (selectedOptions.chats && importData.chatData) filteredData.chatData = importData.chatData;
         
-        // Perform the import
         const success = await importAllData(filteredData);
         
         setImportStatus(success ? 'success' : 'error');
         
-        // Reset file input
         event.target.value = null;
         
-        // Clear status after a delay
         setTimeout(() => setImportStatus(null), 5000);
       } catch (error) {
         console.error('Import error:', error);
@@ -158,11 +148,9 @@ function ImportExportPage() {
   return (
     <div className="import-export-page">
       <h1>Import & Export</h1>
-      
       <div className="data-options">
         <h2>Data Selection</h2>
         <p>Choose what data to include in imports and exports:</p>
-        
         <div className="options-grid">
           <label className="option-checkbox">
             <input
@@ -173,7 +161,6 @@ function ImportExportPage() {
             />
             Characters ({existingData.characters})
           </label>
-          
           <label className="option-checkbox">
             <input
               type="checkbox"
@@ -183,7 +170,6 @@ function ImportExportPage() {
             />
             Environments ({existingData.environments})
           </label>
-          
           <label className="option-checkbox">
             <input
               type="checkbox"
@@ -193,7 +179,6 @@ function ImportExportPage() {
             />
             Worlds ({existingData.worlds})
           </label>
-          
           <label className="option-checkbox">
             <input
               type="checkbox"
@@ -203,7 +188,6 @@ function ImportExportPage() {
             />
             Campaigns ({existingData.campaigns})
           </label>
-          
           <label className="option-checkbox">
             <input
               type="checkbox"
@@ -213,7 +197,6 @@ function ImportExportPage() {
             />
             Map Data ({existingData.mapNodes} nodes/connections)
           </label>
-          
           <label className="option-checkbox">
             <input
               type="checkbox"
@@ -223,7 +206,6 @@ function ImportExportPage() {
             />
             Timeline Events ({existingData.timelineEvents})
           </label>
-          
           <label className="option-checkbox">
             <input
               type="checkbox"
@@ -233,7 +215,6 @@ function ImportExportPage() {
             />
             Character Memories
           </label>
-          
           <label className="option-checkbox">
             <input
               type="checkbox"
@@ -245,14 +226,12 @@ function ImportExportPage() {
           </label>
         </div>
       </div>
-      
       <div className="import-export-container">
         <div className="export-section">
           <h2>Export Your World</h2>
           <p>
             Download all your selected worldbuilding data as a JSON file. This can be used as a backup or for sharing with others.
           </p>
-          
           <button 
             className="export-button"
             onClick={handleExport}
@@ -260,7 +239,6 @@ function ImportExportPage() {
           >
             {exportStatus === 'processing' ? 'Exporting...' : 'Export Selected Data'}
           </button>
-          
           {exportStatus === 'success' && exportStats && (
             <div className="status-message success">
               <h3>Export Successful!</h3>
@@ -280,14 +258,12 @@ function ImportExportPage() {
               </div>
             </div>
           )}
-          
           {exportStatus === 'error' && (
             <div className="status-message error">
               There was an error exporting your data. Please try again.
             </div>
           )}
         </div>
-        
         <div className="import-section">
           <h2>Import Data</h2>
           <p>
@@ -296,7 +272,6 @@ function ImportExportPage() {
           <p className="warning">
             <strong>Warning:</strong> Importing may overwrite existing data with the same IDs. Consider exporting your current data first as a backup.
           </p>
-          
           <label className="import-label">
             <span>{importStatus === 'processing' ? 'Importing...' : 'Select Import File'}</span>
             <input
@@ -306,14 +281,12 @@ function ImportExportPage() {
               disabled={importStatus === 'processing'}
             />
           </label>
-          
           {importStatus === 'success' && (
             <div className="status-message success">
               Import successful! Your data has been imported.
               Refresh the page to see your imported content.
             </div>
           )}
-          
           {importStatus === 'error' && (
             <div className="status-message error">
               There was an error importing your data. Make sure you're using a valid export file and try again.
@@ -321,28 +294,15 @@ function ImportExportPage() {
           )}
         </div>
       </div>
-      
       <div className="sharing-tips">
         <h2>Data Management Tips</h2>
         <ul>
-          <li>
-            <strong>Regular Backups:</strong> Export your data regularly to prevent loss. Browser data can be cleared accidentally.
-          </li>
-          <li>
-            <strong>Collaboration:</strong> Export your world and share the file with others who can import it.
-          </li>
-          <li>
-  <strong>Version Control:</strong> Keep dated exports to track changes and go back to previous versions of your world if needed.
-</li>
-<li>
-  <strong>Moving Data:</strong> Use exports/imports to move your content between devices or browsers.
-</li>
-<li>
-  <strong>Selective Import:</strong> Use the checkboxes to only import specific data types when needed.
-</li>
-<li>
-  <strong>Large Files:</strong> For very complex worlds with many assets, the export file may become large. Consider exporting sections separately.
-  </li>
+          <li><strong>Regular Backups:</strong> Export your data regularly to prevent loss. Browser data can be cleared accidentally.</li>
+          <li><strong>Collaboration:</strong> Export your world and share the file with others who can import it.</li>
+          <li><strong>Version Control:</strong> Keep dated exports to track changes and go back to previous versions of your world if needed.</li>
+          <li><strong>Moving Data:</strong> Use exports/imports to move your content between devices or browsers.</li>
+          <li><strong>Selective Import:</strong> Use the checkboxes to only import specific data types when needed.</li>
+          <li><strong>Large Files:</strong> For very complex worlds with many assets, the export file may become large. Consider exporting sections separately.</li>
         </ul>
       </div>
     </div>

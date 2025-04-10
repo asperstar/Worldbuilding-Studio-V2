@@ -1,20 +1,25 @@
 // src/pages/CampaignSessionPage.js
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext'; // Add this import
-import { loadCharacters, loadWorlds, loadCampaign, saveCampaign } from '../utils/storage';
+import { useStorage } from '../contexts/StorageContext';
 import { getCampaignMemories, addCampaignMemory } from '../utils/memory/campaignMemoryManager';
 import { addMemory } from '../utils/memory/memoryManager';
 import { orchestrateCharacterInteraction } from '../utils/campaignManager';
-import { getCachedEnvironment } from '../utils/environment-selector';
 
 // Define API_URL using the environment variable
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3002';
 
 function CampaignSessionPage() {
   const { campaignId } = useParams();
-  const { currentUser } = useAuth(); // Add this to get the current user
-  const navigate = useNavigate(); // Add this for redirecting
+  const navigate = useNavigate();
+  const { 
+    currentUser, 
+    getCharacters, 
+    getWorlds, 
+    getCampaign, 
+    updateCampaign 
+  } = useStorage();
+  
   const [campaign, setCampaign] = useState(null);
   const [characters, setCharacters] = useState([]);
   const [currentScene, setCurrentScene] = useState(null);
@@ -40,59 +45,58 @@ function CampaignSessionPage() {
     }
   }, [currentUser, navigate]);
 
- // Inside CampaignSessionPage.js
-// Load campaign data on mount
-useEffect(() => {
-  const fetchData = async () => {
-    if (!currentUser) return; // Skip if not authenticated
+  // Load campaign data on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!currentUser) return; // Skip if not authenticated
 
-    setLoading(true);
-    setError(null);
+      setLoading(true);
+      setError(null);
 
-    try {
-      // Load campaign
-      const loadedCampaign = await loadCampaign(parseInt(campaignId), currentUser.uid);
-      if (!loadedCampaign) {
-        throw new Error(`Campaign with ID ${campaignId} not found`);
+      try {
+        // Load campaign
+        const loadedCampaign = await getCampaign(parseInt(campaignId));
+        if (!loadedCampaign) {
+          throw new Error(`Campaign with ID ${campaignId} not found`);
+        }
+
+        setCampaign(loadedCampaign);
+
+        // Load world details
+        if (loadedCampaign && loadedCampaign.worldId) {
+          const worlds = await getWorlds();
+          const campaignWorld = worlds.find(world => world.id === loadedCampaign.worldId);
+          setWorldDetails(campaignWorld);
+        }
+
+        // Set current scene
+        if (loadedCampaign && loadedCampaign.scenes && loadedCampaign.scenes.length > 0) {
+          const sceneIndex = loadedCampaign.currentSceneIndex || 0;
+          setCurrentScene(loadedCampaign.scenes[sceneIndex]);
+        }
+
+        // Load characters
+        const allCharacters = await getCharacters();
+        const campaignCharacters = allCharacters.filter(
+          char => loadedCampaign?.participantIds?.includes(char.id)
+        );
+        setCharacters(campaignCharacters);
+
+        // Initialize messages
+        if (loadedCampaign?.sessions?.length > 0) {
+          const lastSession = loadedCampaign.sessions[loadedCampaign.sessions.length - 1];
+          setMessages(lastSession.messages || []);
+        }
+      } catch (error) {
+        console.error("Error loading campaign data:", error);
+        setError(`Failed to load campaign: ${error.message}`);
+      } finally {
+        setLoading(false);
       }
+    };
 
-      setCampaign(loadedCampaign);
-
-      // Load world details
-      if (loadedCampaign && loadedCampaign.worldId) {
-        const worlds = await loadWorlds(currentUser.uid);
-        const campaignWorld = worlds.find(world => world.id === loadedCampaign.worldId);
-        setWorldDetails(campaignWorld);
-      }
-
-      // Set current scene
-      if (loadedCampaign && loadedCampaign.scenes && loadedCampaign.scenes.length > 0) {
-        const sceneIndex = loadedCampaign.currentSceneIndex || 0;
-        setCurrentScene(loadedCampaign.scenes[sceneIndex]);
-      }
-
-      // Load characters
-      const allCharacters = await loadCharacters(currentUser.uid);
-      const campaignCharacters = allCharacters.filter(
-        char => loadedCampaign?.participantIds?.includes(char.id)
-      );
-      setCharacters(campaignCharacters);
-
-      // Initialize messages
-      if (loadedCampaign?.sessions?.length > 0) {
-        const lastSession = loadedCampaign.sessions[loadedCampaign.sessions.length - 1];
-        setMessages(lastSession.messages || []);
-      }
-    } catch (error) {
-      console.error("Error loading campaign data:", error);
-      setError(`Failed to load campaign: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  fetchData();
-}, [campaignId, currentUser, navigate]);
+    fetchData();
+  }, [campaignId, currentUser, navigate, getCampaign, getWorlds, getCharacters]);
 
   // Update scene characters when current scene changes
   useEffect(() => {
@@ -129,11 +133,16 @@ useEffect(() => {
         return `${speaker}: ${msg.content}`;
       }).join('\n');
 
-      const gmMemories = await getCampaignMemories(
-        gmCharacter.id,
-        campaignId,
-        "scene narrative storytelling plot"
-      );
+      let gmMemories = [];
+      try {
+        gmMemories = await getCampaignMemories(
+          gmCharacter.id,
+          campaignId,
+          "scene narrative storytelling plot"
+        ) || [];
+      } catch (err) {
+        console.warn("Failed to fetch GM memories:", err);
+      }
 
       const response = await fetch(`${API_URL}/chat`, {
         method: 'POST',
@@ -391,31 +400,31 @@ useEffect(() => {
   };
 
   // Update campaign session
-const updateCampaignSession = async (updatedMessages) => {
-  if (!campaign) return;
+  const updateCampaignSession = async (updatedMessages) => {
+    if (!campaign) return;
 
-  try {
-    const updatedCampaign = { ...campaign };
-    if (!updatedCampaign.sessions) updatedCampaign.sessions = [];
+    try {
+      const updatedCampaign = { ...campaign };
+      if (!updatedCampaign.sessions) updatedCampaign.sessions = [];
 
-    if (updatedCampaign.sessions.length === 0) {
-      updatedCampaign.sessions.push({
-        id: Date.now(),
-        date: new Date().toISOString(),
-        sceneIndex: updatedCampaign.currentSceneIndex,
-        messages: updatedMessages
-      });
-    } else {
-      const lastSession = updatedCampaign.sessions[updatedCampaign.sessions.length - 1];
-      lastSession.messages = updatedMessages;
+      if (updatedCampaign.sessions.length === 0) {
+        updatedCampaign.sessions.push({
+          id: Date.now(),
+          date: new Date().toISOString(),
+          sceneIndex: updatedCampaign.currentSceneIndex,
+          messages: updatedMessages
+        });
+      } else {
+        const lastSession = updatedCampaign.sessions[updatedCampaign.sessions.length - 1];
+        lastSession.messages = updatedMessages;
+      }
+
+      await updateCampaign(updatedCampaign);
+      setCampaign(updatedCampaign);
+    } catch (error) {
+      console.error("Error updating campaign session:", error);
     }
-
-    await saveCampaign(updatedCampaign, currentUser.uid);
-    setCampaign(updatedCampaign);
-  } catch (error) {
-    console.error("Error updating campaign session:", error);
-  }
-};
+  };
 
   // Function to apply a scene suggestion
   const applySceneSuggestion = async (suggestion) => {
@@ -437,7 +446,7 @@ const updateCampaignSession = async (updatedMessages) => {
         scenes: updatedScenes
       };
 
-      await saveCampaign(updatedCampaign);
+      await updateCampaign(updatedCampaign);
       setCampaign(updatedCampaign);
       setCurrentScene(updatedScenes[campaign.currentSceneIndex]);
 
@@ -490,7 +499,7 @@ const updateCampaignSession = async (updatedMessages) => {
         scenes: updatedScenes
       };
 
-      await saveCampaign(updatedCampaign);
+      await updateCampaign(updatedCampaign);
       setCampaign(updatedCampaign);
       setCurrentScene(updatedScenes[campaign.currentSceneIndex]);
     } catch (error) {

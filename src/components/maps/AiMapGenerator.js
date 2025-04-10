@@ -1,6 +1,6 @@
 // src/components/maps/AiMapGenerator.js
 import React, { useState, useRef } from 'react';
-import { saveMapData } from '../../utils/storage';
+import { saveMapData } from '../../utils/storageExports';
 
 function AiMapGenerator({ onMapGenerated }) {
   const [description, setDescription] = useState('');

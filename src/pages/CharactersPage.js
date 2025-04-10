@@ -1,16 +1,17 @@
 /* eslint-disable no-unused-vars */
 import React, { useState, useEffect, useCallback } from 'react';
 import CharacterForm from '../components/characters/CharacterForm';
-import { testStorage, loadCharacters, saveCharacter, saveCharacters, deleteCharacter } from '../utils/storage';
+import { saveCharacter, deleteCharacter } from '../utils/storageExports'; // Remove loadCharacters
 import { Link } from 'react-router-dom';
 import { trace } from 'firebase/performance';
 import { perf } from '../firebase';
-import { migrateToFirestore } from '../utils/migrateToFirestore';
+import { useStorage } from '../contexts/StorageContext'; // Add this import
 
 function CharactersPage() {
+  const { getAllCharacters } = useStorage(); // Add this
   const [characters, setCharacters] = useState([]);
   const [editingCharacter, setEditingCharacter] = useState(null);
-  const [storageStatus, setStorageStatus] = useState({ tested: false, working: false }); // Fixed the key
+  const [storageStatus, setStorageStatus] = useState({ tested: false, working: false });
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredCharacters, setFilteredCharacters] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -33,19 +34,16 @@ function CharactersPage() {
     checkStorage();
   }, []);
 
-  // Load characters on component mount with performance tracking
+  // Load all characters using context
   const loadCharacterData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-
     try {
       const t = trace(perf, 'load_characters');
       t.start();
-
-      const characterData = await loadCharacters();
+      const characterData = await getAllCharacters(); // Use context method
       setCharacters(characterData || []);
       setFilteredCharacters(characterData || []);
-
       t.stop();
     } catch (error) {
       console.error("Error loading characters:", error);
@@ -53,7 +51,7 @@ function CharactersPage() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [getAllCharacters]); // Add dependency
 
   useEffect(() => {
     loadCharacterData();
@@ -77,19 +75,17 @@ function CharactersPage() {
   const handleSaveCharacter = async (newCharacter) => {
     try {
       setIsLoading(true);
-
+      setError(null);
       let updatedCharacter;
       if (editingCharacter) {
-        // Update existing character
         updatedCharacter = {
           ...newCharacter,
-          id: editingCharacter.id,
+          id: editingCharacter.id.toString(),
           imageUrl: newCharacter.imageUrl || editingCharacter.imageUrl || '',
           created: editingCharacter.created,
           updated: new Date().toISOString()
         };
       } else {
-        // Create new character
         updatedCharacter = {
           ...newCharacter,
           imageUrl: newCharacter.imageUrl || '',
@@ -98,11 +94,8 @@ function CharactersPage() {
           updated: new Date().toISOString()
         };
       }
-
-      // Save to Firestore
+      console.log("Saving character:", updatedCharacter);
       await saveCharacter(updatedCharacter);
-
-      // Update local state
       if (editingCharacter) {
         setCharacters(prevChars =>
           prevChars.map(char => (char.id === editingCharacter.id ? updatedCharacter : char))
@@ -110,11 +103,10 @@ function CharactersPage() {
       } else {
         setCharacters(prevChars => [...prevChars, updatedCharacter]);
       }
-
       setEditingCharacter(null);
     } catch (error) {
       console.error("Error saving character:", error);
-      setError("Failed to save character. Please try again.");
+      setError(`Failed to save character: ${error.message}`);
     } finally {
       setIsLoading(false);
     }

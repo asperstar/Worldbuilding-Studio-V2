@@ -1,6 +1,6 @@
 // src/components/maps/AzgaarMapIframe.js
 import React, { useState, useEffect, useRef } from 'react';
-import { saveMapData } from '../../utils/storage';
+import { saveMapData } from '../../utils/storageExports';
 import './AzgaarMapIframe.css';
 
 function AzgaarMapIframe({ onMapGenerated }) {

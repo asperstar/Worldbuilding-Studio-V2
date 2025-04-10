@@ -48,37 +48,46 @@ function TimelinePage() {
   useEffect(() => {
     const fetchData = async () => {
       if (!currentUser) {
-        setError('Please log in to access timelines.');
+        setError('Please log in.');
         setLoading(false);
         return;
       }
-
       try {
         setLoading(true);
 
-        // Load worlds
-        const worldsCollection = collection(db, 'worlds');
-        const worldsQuery = query(worldsCollection, where('userId', '==', currentUser.uid));
-        const worldsSnapshot = await getDocs(worldsQuery);
-        const worldsList = worldsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) || [];
-        setWorlds(worldsList);
-        if (worldsList.length > 0) {
-          setSelectedWorld(worldsList[0]);
-        }
+        // Load worlds (unchanged)
+      const worldsCollection = collection(db, 'worlds');
+      const worldsQuery = query(worldsCollection, where('userId', '==', currentUser.uid));
+      const worldsSnapshot = await getDocs(worldsQuery);
+      const worldsList = worldsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) || [];
+      setWorlds(worldsList);
+      if (worldsList.length > 0 && !selectedWorld) {
+        setSelectedWorld(worldsList[0]);
+      }
 
-        // Load characters
+      // Load characters for selected world
+      if (selectedWorld) {
         const charactersCollection = collection(db, 'characters');
-        const charactersQuery = query(charactersCollection, where('userId', '==', currentUser.uid));
+        const charactersQuery = query(
+          charactersCollection,
+          where('userId', '==', currentUser.uid),
+          where('projectId', '==', selectedWorld.id) // Add this filter
+        );
         const charactersSnapshot = await getDocs(charactersQuery);
         const charactersList = charactersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) || [];
         setCharacters(charactersList);
 
-        // Load environments
+        // Load environments for selected world
         const environmentsCollection = collection(db, 'environments');
-        const environmentsQuery = query(environmentsCollection, where('userId', '==', currentUser.uid));
+        const environmentsQuery = query(
+          environmentsCollection,
+          where('userId', '==', currentUser.uid),
+          where('projectId', '==', selectedWorld.id) // Add this filter
+        );
         const environmentsSnapshot = await getDocs(environmentsQuery);
         const environmentsList = environmentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) || [];
         setEnvironments(environmentsList);
+      }
 
         // Load collisions - only get ones relevant to this user
         const collisionsCollection = collection(db, 'collisions');
@@ -88,14 +97,13 @@ function TimelinePage() {
         setCollisions(collisionsList);
       } catch (err) {
         console.error('Error fetching data:', err);
-        setError('Failed to load data. Please try again later.');
+        setError('Failed to load data.');
       } finally {
         setLoading(false);
       }
     };
-
     fetchData();
-  }, [currentUser]);
+  }, [currentUser, selectedWorld]);
 
   useEffect(() => {
     const fetchTimelinesAndPeriods = async () => {

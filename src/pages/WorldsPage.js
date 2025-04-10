@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import WorldForm from '../components/worlds/WorldForm';
-import { loadWorlds, saveWorlds, deleteWorld } from '../utils/storage';
+import { loadWorlds, saveWorlds, deleteWorld } from '../utils/storageExports';
 import { useStorage } from '../contexts/StorageContext';
 
 function WorldsPage() {

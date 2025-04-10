@@ -1,5 +1,5 @@
-// src/pages/MapPage.js
 import React, { useState, useEffect, useCallback } from 'react';
+import { useParams } from 'react-router-dom';
 import { useStorage } from '../contexts/StorageContext';
 import ReactFlow, { 
   MiniMap, 
@@ -12,9 +12,11 @@ import ReactFlow, {
   MarkerType
 } from 'reactflow';
 import 'reactflow/dist/style.css';
+import './MapStyles.css'; // Import the CSS
 
 function MapPage() {
-  const { currentUser, getMapData, updateMapData } = useStorage();
+  const { worldId } = useParams(); // Add this line
+  const { currentUser, getMapData, updateMapData, getEnvironments, getCharacters } = useStorage();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [environments, setEnvironments] = useState([]);
@@ -26,60 +28,65 @@ function MapPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Load map data when component mounts
   useEffect(() => {
     const loadData = async () => {
-      if (!currentUser) {
+      if (!currentUser || !worldId) {
         setLoading(false);
         return;
       }
-      
       setLoading(true);
       setError(null);
-      
       try {
-        // Load map data
         const mapData = await getMapData();
+        const fetchedEnvironments = await getEnvironments(worldId); // Pass worldId
+        const fetchedCharacters = await getCharacters(worldId); // Pass worldId
+        setEnvironments(fetchedEnvironments || []);
+        setCharacters(fetchedCharacters || []);
+        
+        console.log('Map data in MapPage:', mapData);
         
         if (mapData && mapData.nodes && mapData.edges) {
-          // Process nodes to ensure they have all required properties
-          const formattedNodes = mapData.nodes.map(node => ({
-            ...node,
-            // Ensure node has required properties for ReactFlow
-            id: node.id.toString(),
-            position: node.position || { x: 0, y: 0 },
-            data: node.data || { label: node.label || 'Node' }
-          }));
+          const formattedNodes = mapData.nodes.map(node => {
+            console.log('Processing node:', node);
+            return {
+              ...node,
+              id: node.id ? node.id.toString() : `node_${Date.now()}`,
+              position: node.position || { x: 0, y: 0 },
+              data: {
+                ...node.data,
+                label: node.data?.label || node.label || 'Node',
+                type: node.data?.type || 'default'
+              }
+            };
+          });
           
-          // Process edges to ensure they have all required properties
-          const formattedEdges = mapData.edges.map(edge => ({
-            ...edge,
-            // Ensure edge has required properties for ReactFlow
-            id: edge.id.toString(),
-            source: edge.source.toString(),
-            target: edge.target.toString(),
-            type: edge.type || 'default'
-          }));
+          const formattedEdges = mapData.edges.map(edge => {
+            console.log('Processing edge:', edge);
+            return {
+              ...edge,
+              id: edge.id ? edge.id.toString() : `edge_${Date.now()}`,
+              source: edge.source ? edge.source.toString() : '',
+              target: edge.target ? edge.target.toString() : '',
+              type: edge.type || 'default'
+            };
+          });
           
           setNodes(formattedNodes);
           setEdges(formattedEdges);
         } else {
-          // If no map data exists, initialize with empty arrays
           setNodes([]);
           setEdges([]);
         }
       } catch (err) {
-        console.error('Error loading map data:', err);
-        setError('Failed to load map data. Please try again.');
+        console.error('Error loading data:', err);
+        setError('Failed to load map data.');
       } finally {
         setLoading(false);
       }
     };
-    
     loadData();
-  }, [currentUser, getMapData]);
+  }, [currentUser, getMapData, getEnvironments, getCharacters, worldId]); // Add worldId
 
-  // Save map data when it changes
   const saveMapData = useCallback(async () => {
     if (!currentUser) return;
     
@@ -95,7 +102,6 @@ function MapPage() {
     }
   }, [nodes, edges, currentUser, updateMapData]);
 
-  // Handle adding a new node
   const handleAddNode = (type, data) => {
     const newNode = {
       id: `${type}_${Date.now()}`,
@@ -113,12 +119,9 @@ function MapPage() {
     };
     
     setNodes(prevNodes => [...prevNodes, newNode]);
-    
-    // Save after adding a node
     setTimeout(saveMapData, 500);
   };
 
-  // Handle edge creation
   const onConnect = useCallback((params) => {
     setEdges(eds => {
       const newEdges = addEdge({
@@ -134,24 +137,19 @@ function MapPage() {
         }
       }, eds);
       
-      // Save after adding an edge
       setTimeout(saveMapData, 500);
-      
       return newEdges;
     });
   }, [saveMapData]);
 
-  // Node deletion handler
   const onNodesDelete = useCallback((deleted) => {
     setTimeout(saveMapData, 500);
   }, [saveMapData]);
 
-  // Edge deletion handler
   const onEdgesDelete = useCallback((deleted) => {
     setTimeout(saveMapData, 500);
   }, [saveMapData]);
 
-  // Content for different sidebar tabs
   const renderSidebarContent = () => {
     switch (activeTab) {
       case 'environments':

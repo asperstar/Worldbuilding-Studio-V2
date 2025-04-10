@@ -1,6 +1,6 @@
 // src/components/maps/AzgaarMapGenerator.js
 import React, { useState, useEffect, useRef } from 'react';
-import { saveMapData } from '../../utils/storage';
+import { saveMapData } from '../../utils/storageExports';
 import './AzgaarMapGenerator.css'; // You'll need to create this file for styling
 
 function AzgaarMapGenerator({ onMapGenerated }) {

@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useStorage } from '../../contexts/StorageContext';
 
-function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing }) {
+
+function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing, worlds = [] }) { // Add worlds prop
   const [environment, setEnvironment] = useState({
     name: '',
     description: '',
@@ -14,7 +15,8 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing }) {
     imageUrl: '',
     imageSource: 'none',
     mapCoordinates: { x: 0, y: 0 },
-    mapSize: { width: 1, height: 1 }
+    mapSize: { width: 1, height: 1 },
+    projectId: '' // Add projectId to state
   });
   
   const [imagePreview, setImagePreview] = useState(null);
@@ -30,7 +32,8 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing }) {
         ...initialEnvironment,
         imageSource: initialEnvironment.imageUrl ? 'upload' : 'none',
         mapCoordinates: initialEnvironment.mapCoordinates || { x: 0, y: 0 },
-        mapSize: initialEnvironment.mapSize || { width: 1, height: 1 }
+        mapSize: initialEnvironment.mapSize || { width: 1, height: 1 },
+        projectId: initialEnvironment.projectId || '' // Initialize projectId
       });
       setImagePreview(initialEnvironment.imageUrl);
     } else {
@@ -59,7 +62,8 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing }) {
       imageUrl: '',
       imageSource: 'none',
       mapCoordinates: { x: 0, y: 0 },
-      mapSize: { width: 1, height: 1 }
+      mapSize: { width: 1, height: 1 },
+      projectId: '' // Reset projectId
     });
     setImagePreview(null);
     
@@ -81,11 +85,7 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing }) {
     
     try {
       setIsUploading(true);
-      
-      // For now, just create a local object URL
-      // In a real Firebase implementation, you would upload to Firebase Storage
       const imageUrl = URL.createObjectURL(file);
-      
       setImagePreview(imageUrl);
       setEnvironment({
         ...environment, 
@@ -107,17 +107,9 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing }) {
     const svgCode = `
     <svg width="400" height="200" xmlns="http://www.w3.org/2000/svg">
       <rect width="400" height="200" fill="${randomColor}" />
-      
-      <!-- Sky/Background -->
       <rect width="400" height="120" fill="${randomColor}" />
-      
-      <!-- Mountains/Terrain -->
       <polygon points="0,120 80,60 160,100 240,40 320,80 400,60 400,120" fill="rgba(0,0,0,0.3)" />
-      
-      <!-- Ground/Foreground -->
       <rect x="0" y="120" width="400" height="80" fill="rgba(0,0,0,0.2)" />
-      
-      <!-- Text -->
       <text x="200" y="180" font-family="Arial" font-size="16" text-anchor="middle" fill="white">
         ${environment.name || 'Environment'}
       </text>
@@ -159,7 +151,6 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing }) {
     e.preventDefault();
     
     try {
-      // Add userId for Firestore security rules
       await onSave({
         ...environment,
         userId: currentUser?.uid
@@ -207,13 +198,10 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing }) {
               className="file-input"
               id="environment-image-upload"
               disabled={isUploading}
-              
-              
             />
             <div className="file-input-wrapper">
               <label htmlFor="environment-image-upload" className="file-select-btn">
                 {isUploading ? 'Uploading...' : 'Choose File'}
-                
               </label>
               <span className="file-name">
                 {fileInputRef.current?.files?.[0]?.name || "No file chosen"}
@@ -227,7 +215,6 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing }) {
               className="generate-button"
               onClick={generatePlaceholderImage}
               disabled={isUploading}
-              
             >
               Generate Simple Image
             </button>
@@ -237,7 +224,6 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing }) {
               className="generate-ai-button"
               onClick={() => alert("AI Image generation coming soon!")}
               disabled={true}
-              
             >
               AI Image (Coming Soon)
             </button>
@@ -245,93 +231,108 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing }) {
         </div>
       </div>
       
-     {/* Form Fields */}
-<div className="form-fields">
-  <div className="form-group">
-    <label htmlFor="name">Name:</label>
-    <input
-      type="text"
-      id="name"
-      name="name"
-      value={environment.name}
-      onChange={handleChange}
-      required
-    />
-  </div>
-  
-  <div className="form-group">
-    <label htmlFor="climate">Climate:</label>
-    <input
-      type="text"
-      id="climate"
-      name="climate"
-      value={environment.climate}
-      onChange={handleChange}
-    />
-  </div>
-  
-  <div className="form-group">
-    <label htmlFor="terrain">Terrain:</label>
-    <input
-      type="text"
-      id="terrain"
-      name="terrain"
-      value={environment.terrain}
-      onChange={handleChange}
-    />
-  </div>
-  
-  <div className="form-group">
-    <label htmlFor="description">Description:</label>
-    <textarea
-      id="description"
-      name="description"
-      value={environment.description}
-      onChange={handleChange}
-      rows="3"
-    ></textarea>
-  </div>
-  
-  <div className="form-group">
-    <label htmlFor="inhabitants">Inhabitants:</label>
-    <textarea
-      id="inhabitants"
-      name="inhabitants"
-      value={environment.inhabitants}
-      onChange={handleChange}
-      rows="2"
-    ></textarea>
-  </div>
-  
-  <div className="form-group">
-    <label htmlFor="points_of_interest">Points of Interest:</label>
-    <textarea
-      id="points_of_interest"
-      name="points_of_interest"
-      value={environment.points_of_interest}
-      onChange={handleChange}
-      rows="2"
-    ></textarea>
-  </div>
-  
-  <div className="form-group">
-    <label htmlFor="dangers">Dangers:</label>
-    <textarea
-      id="dangers"
-      name="dangers"
-      value={environment.dangers}
-      onChange={handleChange}
-      rows="2"
-    ></textarea>
-  </div>
-</div>
+      {/* Form Fields */}
+      <div className="form-fields">
+        <div className="form-group">
+          <label htmlFor="name">Name:</label>
+          <input
+            type="text"
+            id="name"
+            name="name"
+            value={environment.name}
+            onChange={handleChange}
+            required
+          />
+        </div>
+
+        {/* Add World Selection Dropdown */}
+        <div className="form-group">
+          <label htmlFor="projectId">World:</label>
+          <select
+            id="projectId"
+            name="projectId"
+            value={environment.projectId}
+            onChange={handleChange}
+          >
+            <option value="">No World</option>
+            {worlds.map(world => (
+              <option key={world.id} value={world.id}>{world.name}</option>
+            ))}
+          </select>
+        </div>
+        
+        <div className="form-group">
+          <label htmlFor="climate">Climate:</label>
+          <input
+            type="text"
+            id="climate"
+            name="climate"
+            value={environment.climate}
+            onChange={handleChange}
+          />
+        </div>
+        
+        <div className="form-group">
+          <label htmlFor="terrain">Terrain:</label>
+          <input
+            type="text"
+            id="terrain"
+            name="terrain"
+            value={environment.terrain}
+            onChange={handleChange}
+          />
+        </div>
+        
+        <div className="form-group">
+          <label htmlFor="description">Description:</label>
+          <textarea
+            id="description"
+            name="description"
+            value={environment.description}
+            onChange={handleChange}
+            rows="3"
+          ></textarea>
+        </div>
+        
+        <div className="form-group">
+          <label htmlFor="inhabitants">Inhabitants:</label>
+          <textarea
+            id="inhabitants"
+            name="inhabitants"
+            value={environment.inhabitants}
+            onChange={handleChange}
+            rows="2"
+          ></textarea>
+        </div>
+        
+        <div className="form-group">
+          <label htmlFor="points_of_interest">Points of Interest:</label>
+          <textarea
+            id="points_of_interest"
+            name="points_of_interest"
+            value={environment.points_of_interest}
+            onChange={handleChange}
+            rows="2"
+          ></textarea>
+        </div>
+        
+        <div className="form-group">
+          <label htmlFor="dangers">Dangers:</label>
+          <textarea
+            id="dangers"
+            name="dangers"
+            value={environment.dangers}
+            onChange={handleChange}
+            rows="2"
+          ></textarea>
+        </div>
+      </div>
       
       <div className="form-buttons">
         <button 
           type="submit" 
           className="submit-button"
           disabled={isUploading}
-    
         >
           {isEditing ? 'Update Environment' : 'Save Environment'}
         </button>

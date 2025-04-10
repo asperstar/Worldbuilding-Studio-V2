@@ -7,7 +7,7 @@ import {
   signInWithEmailAndPassword,
   onAuthStateChanged
 } from 'firebase/auth';
-import { testStorage } from '../utils/storage';
+import { testStorage } from '../utils/storageExports';
 
 function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);

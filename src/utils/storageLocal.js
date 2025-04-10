@@ -1,4 +1,4 @@
-// src/utils/storageLocal.js
+// src/utils/storageExportsLocal.js
 export const loadWorlds = () => {
     const worlds = localStorage.getItem('worldbuilding-worlds');
     return worlds ? JSON.parse(worlds) : [];

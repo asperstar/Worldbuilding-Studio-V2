@@ -13,6 +13,7 @@ const corsOptions = {
       'http://localhost:3000',
       'http://localhost:55596', // Ensure this is included
       'https://worldbuilding-bbluwxi-zoe-leonhardt-projects.vercel.app',
+      'http://192.168.0.0:3000',
       'https://worldbuilding.studio', // If you’ve set up the custom domain
       'https://www.worldbuilding.studio',
       /\.vercel\.app$/,
@@ -79,6 +80,6 @@ app.post('/chat', async (req, res) => {
   }
 });
 
-app.listen(port, () => {
+app.listen(port, '0.0.0.0', () => {
   console.log(`Server running on port ${port}`);
 });

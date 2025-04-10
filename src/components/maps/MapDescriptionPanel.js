@@ -1,6 +1,6 @@
 // src/components/maps/MapDescriptionPanel.js
 import React, { useState } from 'react';
-import { loadMapData, loadWorlds } from '../../utils/storage';
+import { loadMapData, loadWorlds } from '../../utils/storageExports';
 
 function MapDescriptionPanel({ mapId, worldId }) {
   const [description, setDescription] = useState('');

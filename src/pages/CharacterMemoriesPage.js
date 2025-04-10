@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { getCharacterMemories, removeMemory, MEMORY_TYPES } from '../utils/memory/memoryManager';
-import { loadCharacters } from '../utils/storage';
+import { loadCharacters } from '../utils/storageExports';
 
 function CharacterMemoriesPage() {
   const { characterId } = useParams();
