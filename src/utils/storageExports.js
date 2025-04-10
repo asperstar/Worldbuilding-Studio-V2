@@ -168,15 +168,18 @@ export const loadCampaign = async (campaignId, userId = null) => {
 };
 
 
-
-
 export const saveCampaign = async (campaign, userId = null) => {
   try {
     const user = await ensureAuthenticated();
-    const userIdToUse = userId || user.uid;
+    // Fix: ensure userIdToUse is consistently a string
+    const userIdToUse = userId || (typeof user === 'string' ? user : user.uid);
+    
+    console.log(`Saving campaign ${campaign.id} for user ${userIdToUse}`);
+    console.log(`Campaign has ${campaign.sessions?.length || 0} sessions`);
     
     const campaignToSave = { ...campaign, userId: userIdToUse };
     await setDoc(doc(db, 'campaigns', campaign.id.toString()), campaignToSave);
+    console.log(`Campaign saved successfully`);
     return true;
   } catch (error) {
     console.error('Error saving campaign to Firestore:', error);

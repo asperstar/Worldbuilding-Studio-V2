@@ -8,6 +8,78 @@ const API_URL = process.env.NODE_ENV === 'production'
   ? 'https://worldbuilding-studio-backend.vercel.app' 
   : 'http://localhost:3002';
 
+// Local storage helpers
+const saveToLocalStorage = (campaignId, messages) => {
+  try {
+    localStorage.setItem(`campaign_${campaignId}_messages`, JSON.stringify(messages));
+    console.log("Saved messages to localStorage as fallback");
+    return true;
+  } catch (e) {
+    console.error("Error saving to localStorage:", e);
+    return false;
+  }
+};
+
+const getFromLocalStorage = (campaignId) => {
+  try {
+    const saved = localStorage.getItem(`campaign_${campaignId}_messages`);
+    return saved ? JSON.parse(saved) : null;
+  } catch (e) {
+    console.error("Error loading from localStorage:", e);
+    return null;
+  }
+};
+
+// Utility function to deep clean an object for Firestore
+const deepCleanForFirestore = (obj) => {
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+
+  // Handle arrays
+  if (Array.isArray(obj)) {
+    return obj.map(item => deepCleanForFirestore(item));
+  }
+
+  // Handle objects
+  const cleaned = {};
+  for (const key of Object.keys(obj)) {
+    const value = obj[key];
+
+    // Log and skip fields that are custom objects (like userImpl)
+    if (value && typeof value === 'object' && value.constructor && value.constructor.name === 'userImpl') {
+      console.log(`Found userImpl object in field '${key}':`, value);
+      continue;
+    }
+
+    // Force-remove the 'user' field to ensure it's not causing issues
+    if (key === 'user') {
+      console.log(`Removing 'user' field with value:`, value);
+      continue;
+    }
+
+    // Skip undefined values
+    if (value === undefined) {
+      console.log(`Removing undefined field '${key}'`);
+      continue;
+    }
+
+    // Recursively clean nested objects
+    if (typeof value === 'object') {
+      cleaned[key] = deepCleanForFirestore(value);
+    } else {
+      cleaned[key] = value;
+    }
+
+    // Convert createdBy to a string if it's an object
+    if (key === 'createdBy' && value && typeof value === 'object') {
+      cleaned[key] = value.uid || (typeof currentUser !== 'undefined' ? currentUser.uid : null);
+    }
+  }
+
+  return cleaned;
+};
+
 const CampaignSessionPage = () => {
   const { campaignId } = useParams();
   const navigate = useNavigate();
@@ -16,7 +88,6 @@ const CampaignSessionPage = () => {
   // State variables
   const [campaign, setCampaign] = useState(null);
   const [worldDetails, setWorldDetails] = useState(null);
-  const [currentScene, setCurrentScene] = useState(null);
   const [characters, setCharacters] = useState([]);
   const [currentCharacter, setCurrentCharacter] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -44,36 +115,30 @@ const CampaignSessionPage = () => {
         if (!loadedCampaign) {
           throw new Error('Campaign not found or you do not have access to this campaign.');
         }
-        console.log('Loaded campaign:', loadedCampaign);
-        setCampaign(loadedCampaign);
+
+        // Clean the loaded campaign to remove unsupported fields
+        const cleanedCampaign = deepCleanForFirestore(loadedCampaign);
+        console.log('Loaded and cleaned campaign:', cleanedCampaign);
+        setCampaign(cleanedCampaign);
 
         // Load world details
-        if (loadedCampaign && loadedCampaign.worldId) {
+        if (cleanedCampaign && cleanedCampaign.worldId) {
           const worlds = await getWorlds();
-          const campaignWorld = worlds.find(world => world.id === loadedCampaign.worldId);
+          const campaignWorld = worlds.find(world => world.id === cleanedCampaign.worldId);
           if (!campaignWorld) {
-            console.warn('World not found for campaign:', loadedCampaign.worldId);
-            setError(`World with ID ${loadedCampaign.worldId} not found for this campaign.`);
+            console.warn('World not found for campaign:', cleanedCampaign.worldId);
+            setError(`World with ID ${cleanedCampaign.worldId} not found for this campaign.`);
           }
           console.log('Loaded world:', campaignWorld);
           setWorldDetails(campaignWorld);
         } else {
-          console.warn('No worldId specified for campaign:', loadedCampaign.id);
-        }
-
-        // Set current scene
-        if (loadedCampaign && loadedCampaign.scenes && loadedCampaign.scenes.length > 0) {
-          const sceneIndex = loadedCampaign.currentSceneIndex || 0;
-          console.log('Setting scene at index:', sceneIndex);
-          setCurrentScene(loadedCampaign.scenes[sceneIndex]);
-        } else {
-          console.warn('No scenes found for campaign:', loadedCampaign.id);
+          console.warn('No worldId specified for campaign:', cleanedCampaign.id);
         }
 
         // Load characters
         const allCharacters = await getCharacters();
         const campaignCharacters = allCharacters.filter(
-          char => loadedCampaign?.participantIds?.includes(char.id)
+          char => cleanedCampaign?.participantIds?.includes(char.id)
         );
         console.log('Loaded characters:', campaignCharacters);
 
@@ -86,20 +151,28 @@ const CampaignSessionPage = () => {
         setCharacters(updatedCharacters);
 
         // Set default character (default to the user)
-        if (updatedCharacters.length > 0 && loadedCampaign?.scenes?.[loadedCampaign.currentSceneIndex || 0]?.characterIds?.length > 0) {
+        if (updatedCharacters.length > 0) {
           const defaultCharacter = updatedCharacters.find(char => char.id === 'user');
           setCurrentCharacter(defaultCharacter || updatedCharacters[0]);
         }
 
         // Initialize messages
-        if (loadedCampaign?.sessions?.length > 0) {
-          const lastSession = loadedCampaign.sessions[loadedCampaign.sessions.length - 1];
-          console.log('Loaded messages:', lastSession.messages);
-          setMessages(lastSession.messages || []);
+        let initialMessages = [];
+        if (cleanedCampaign?.sessions?.length > 0) {
+          const lastSession = cleanedCampaign.sessions[cleanedCampaign.sessions.length - 1];
+          console.log('Loaded messages from Firestore:', lastSession.messages);
+          initialMessages = lastSession.messages || [];
         } else {
-          console.log('No sessions found for campaign, starting with empty messages');
-          setMessages([]);
+          console.log('No sessions found for campaign, checking localStorage');
+          const localMessages = getFromLocalStorage(campaignId);
+          if (localMessages) {
+            console.log('Loaded messages from localStorage:', localMessages);
+            initialMessages = localMessages;
+          } else {
+            console.log('No messages found in localStorage, starting with empty messages');
+          }
         }
+        setMessages(initialMessages);
       } catch (error) {
         console.error("Error loading campaign data:", error);
         setError(error.message);
@@ -113,71 +186,86 @@ const CampaignSessionPage = () => {
 
   const updateCampaignSession = async (updatedMessages) => {
     if (!campaign) return;
-
+  
+    // Always save to localStorage as a fallback
+    saveToLocalStorage(campaign.id, updatedMessages);
+  
     try {
       const updatedCampaign = {
         ...campaign,
-        sessions: campaign.sessions ? [...campaign.sessions] : []
+        sessions: campaign.sessions ? [...campaign.sessions] : [],
       };
-      
+  
+      // Remove scenes and currentSceneIndex since we're not using them
+      delete updatedCampaign.scenes;
+      delete updatedCampaign.currentSceneIndex;
+  
       if (updatedCampaign.sessions.length === 0) {
         updatedCampaign.sessions.push({
           id: Date.now(),
           date: new Date().toISOString(),
-          sceneIndex: updatedCampaign.currentSceneIndex || 0,
-          messages: updatedMessages
+          messages: updatedMessages,
         });
       } else {
         updatedCampaign.sessions[updatedCampaign.sessions.length - 1].messages = updatedMessages;
       }
-
-      await updateCampaign(updatedCampaign);
-      setCampaign(updatedCampaign);
+  
+      // Deep clean the campaign object for Firestore
+      let cleanCampaign = deepCleanForFirestore(updatedCampaign);
+  
+      // Final check: ensure the 'user' field is removed
+      if (cleanCampaign.user) {
+        console.log("Final check: 'user' field still present after deepCleanForFirestore, removing it:", cleanCampaign.user);
+        delete cleanCampaign.user;
+      }
+  
+      console.log('Saving cleaned campaign (final, just before updateCampaign):', JSON.stringify(cleanCampaign, null, 2));
+  
+      await updateCampaign(cleanCampaign);
+      setCampaign(cleanCampaign);
     } catch (error) {
       console.error("Error updating campaign session:", error);
-      setError('Failed to save session: ' + error.message);
+      setError('Session saved locally but not to cloud: ' + error.message);
     }
   };
 
-// In CampaignSessionPage.js, update your getAIResponse function to match the /chat endpoint format:
-const getAIResponse = async (messages, targetCharacter) => {
-  try {
-    // Get the last message from the user
-    const lastUserMessage = messages[messages.length - 1].content;
-    
-    // Create a system prompt similar to what ChatPage uses
-    const systemPrompt = `You are ${targetCharacter.name}, a character with the following traits: ${targetCharacter.traits || 'none'}. 
-    Your personality is: ${targetCharacter.personality || 'neutral'}. 
-    Your background: ${targetCharacter.background || 'unknown'}.
-    Current scene: ${currentScene?.title || ''} - ${currentScene?.description || ''}
-    Respond as this character would.`;
-    
-    console.log('Sending to API:', `${API_URL}/chat`);
-    console.log('System prompt:', systemPrompt);
-    console.log('User message:', lastUserMessage);
-    
-    // Use the /chat endpoint with the same format as ChatPage
-    const response = await fetch(`${API_URL}/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        systemPrompt, 
-        userMessage: lastUserMessage 
-      }),
-    });
+  const getAIResponse = async (messages, targetCharacter) => {
+    try {
+      // Get the last message from the user
+      const lastUserMessage = messages[messages.length - 1].content;
+      
+      // Create a system prompt without scene context
+      const systemPrompt = `You are ${targetCharacter.name}, a character with the following traits: ${targetCharacter.traits || 'none'}. 
+      Your personality is: ${targetCharacter.personality || 'neutral'}. 
+      Your background: ${targetCharacter.background || 'unknown'}.
+      Respond as this character would.`;
+      
+      console.log('Sending to API:', `${API_URL}/chat`);
+      console.log('System prompt:', systemPrompt);
+      console.log('User message:', lastUserMessage);
+      
+      // Use the /chat endpoint with the same format as ChatPage
+      const response = await fetch(`${API_URL}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          systemPrompt, 
+          userMessage: lastUserMessage 
+        }),
+      });
 
-    if (!response.ok) {
-      throw new Error(`Server error: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.response;
+    } catch (error) {
+      console.error('Error in getAIResponse:', error);
+      // Fallback
+      return `*${targetCharacter.name} seems unsure how to respond*`;
     }
-
-    const data = await response.json();
-    return data.response;
-  } catch (error) {
-    console.error('Error in getAIResponse:', error);
-    // Fallback
-    return `*${targetCharacter.name} seems unsure how to respond*`;
-  }
-};
+  };
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -189,9 +277,9 @@ const getAIResponse = async (messages, targetCharacter) => {
     const isUserSpeaking = currentCharacter.id === 'user';
     const senderName = isUserSpeaking ? 'You (Player)' : currentCharacter.name;
 
-    // If the user is speaking, the target is the first AI character in the scene
+    // If the user is speaking, the target is the first AI character in the campaign
     const targetCharacter = isUserSpeaking
-      ? characters.find(char => char.id !== 'user' && currentScene?.characterIds?.includes(char.id))
+      ? characters.find(char => char.id !== 'user')
       : null;
 
     const updatedMessages = [
@@ -252,8 +340,6 @@ const getAIResponse = async (messages, targetCharacter) => {
   return (
     <div className="campaign-session">
       <h1>Campaign: {campaign?.name}</h1>
-      <h2>Scene: {currentScene?.title}</h2>
-      <p>{currentScene?.description}</p>
 
       <div className="chat-area">
         {messages.map((msg, index) => (
@@ -291,8 +377,6 @@ const getAIResponse = async (messages, targetCharacter) => {
 
       <div className="game-master-controls">
         <h3>Game Master Controls</h3>
-        <button onClick={() => {/* Handle previous scene */}}>Previous Scene</button>
-        <button onClick={() => {/* Handle next scene */}}>Next Scene</button>
         <div>
           <label>
             <input
