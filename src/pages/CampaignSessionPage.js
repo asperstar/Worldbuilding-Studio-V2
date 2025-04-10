@@ -1,3 +1,5 @@
+
+/* eslint-disable no-undef*/
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStorage } from '../contexts/StorageContext';

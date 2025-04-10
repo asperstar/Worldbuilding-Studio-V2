@@ -4663,7 +4663,7 @@ tr:hover {
   cursor: pointer;
 }
 
-// In App.css, add these style fixes:
+
 .card-actions {
   display: flex;
   gap: 10px;

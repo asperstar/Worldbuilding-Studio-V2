@@ -1,3 +1,5 @@
+/* eslint-disable no-undef*/
+
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { auth } from '../firebase';
 import { onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
