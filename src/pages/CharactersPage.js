@@ -1,4 +1,5 @@
 /* eslint-disable no-undef*/
+/* eslint-disable no-undef*/
 import React, { useState, useEffect, useCallback } from 'react';
 import CharacterForm from '../components/characters/CharacterForm';
 import { saveCharacter, deleteCharacter } from '../utils/storageExports';
@@ -6,9 +7,10 @@ import { Link } from 'react-router-dom';
 import { trace } from 'firebase/performance';
 import { perf } from '../firebase';
 import { useStorage } from '../contexts/StorageContext';
+import debounce from 'lodash/debounce';
 
 function CharactersPage() {
-  const { getAllCharacters } = useStorage();
+  const { currentUser, getAllCharacters } = useStorage();
   const [characters, setCharacters] = useState([]);
   const [editingCharacter, setEditingCharacter] = useState(null);
   const [storageStatus, setStorageStatus] = useState({ tested: false, working: false });
@@ -16,11 +18,19 @@ function CharactersPage() {
   const [filteredCharacters, setFilteredCharacters] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [page, setPage] = useState(1); // Add pagination state
-  const [hasMore, setHasMore] = useState(true); // Track if there are more characters to load
-  const pageSize = 10; // Number of characters per page
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const pageSize = 10;
+  const [draftCharacter, setDraftCharacter] = useState(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    traits: '',
+    personality: '',
+    background: '',
+    imageUrl: ''
+  });
 
-  // Test Firestore connectivity on component mount
   useEffect(() => {
     const checkStorage = async () => {
       try {
@@ -37,7 +47,6 @@ function CharactersPage() {
     checkStorage();
   }, []);
 
-  // Load characters with pagination
   const loadCharacterData = useCallback(async (pageNum) => {
     setIsLoading(true);
     setError(null);
@@ -68,10 +77,11 @@ function CharactersPage() {
   }, [getAllCharacters, pageSize]);
 
   useEffect(() => {
-    loadCharacterData(page);
-  }, [loadCharacterData, page]);
+    if (currentUser) {
+      loadCharacterData(page);
+    }
+  }, [loadCharacterData, page, currentUser]);
 
-  // Filter characters based on search query
   useEffect(() => {
     if (!searchQuery.trim()) {
       setFilteredCharacters(characters);
@@ -86,6 +96,43 @@ function CharactersPage() {
     }
   }, [searchQuery, characters]);
 
+  const autoSave = debounce(async (characterData) => {
+    if (!currentUser || !characterData.name) return;
+
+    try {
+      const characterToSave = {
+        ...characterData,
+        userId: currentUser.uid,
+        isDraft: true,
+        created: draftCharacter ? draftCharacter.created : new Date().toISOString(),
+        updated: new Date().toISOString(),
+      };
+
+      if (!draftCharacter) {
+        characterToSave.id = `char_${Date.now()}`;
+        await saveCharacter(characterToSave, currentUser);
+        setDraftCharacter(characterToSave);
+      } else {
+        const updatedCharacter = { ...draftCharacter, ...characterToSave };
+        await saveCharacter(updatedCharacter, currentUser);
+        setDraftCharacter(updatedCharacter);
+      }
+    } catch (error) {
+      console.error('Error auto-saving character:', error);
+      setError('Failed to auto-save character.');
+    }
+  }, 1000);
+
+  const handleFormChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => {
+      const updated = { ...prev, [name]: value };
+      setHasUnsavedChanges(true);
+      autoSave(updated);
+      return updated;
+    });
+  };
+
   const handleSaveCharacter = async (newCharacter) => {
     try {
       setIsLoading(true);
@@ -97,7 +144,18 @@ function CharactersPage() {
           id: editingCharacter.id.toString(),
           imageUrl: newCharacter.imageUrl || editingCharacter.imageUrl || '',
           created: editingCharacter.created,
-          updated: new Date().toISOString()
+          updated: new Date().toISOString(),
+          userId: currentUser.uid,
+          isDraft: false,
+        };
+      } else if (draftCharacter) {
+        updatedCharacter = {
+          ...draftCharacter,
+          ...newCharacter,
+          imageUrl: newCharacter.imageUrl || '',
+          updated: new Date().toISOString(),
+          userId: currentUser.uid,
+          isDraft: false,
         };
       } else {
         updatedCharacter = {
@@ -105,11 +163,13 @@ function CharactersPage() {
           imageUrl: newCharacter.imageUrl || '',
           id: `char_${Date.now()}`,
           created: new Date().toISOString(),
-          updated: new Date().toISOString()
+          updated: new Date().toISOString(),
+          userId: currentUser.uid,
+          isDraft: false,
         };
       }
-      console.log("Saving character:", updatedCharacter);
-      await saveCharacter(updatedCharacter);
+
+      await saveCharacter(updatedCharacter, currentUser);
       if (editingCharacter) {
         setCharacters(prevChars =>
           prevChars.map(char => (char.id === editingCharacter.id ? updatedCharacter : char))
@@ -118,6 +178,15 @@ function CharactersPage() {
         setCharacters(prevChars => [...prevChars, updatedCharacter]);
       }
       setEditingCharacter(null);
+      setDraftCharacter(null);
+      setHasUnsavedChanges(false);
+      setFormData({
+        name: '',
+        traits: '',
+        personality: '',
+        background: '',
+        imageUrl: ''
+      });
     } catch (error) {
       console.error("Error saving character:", error);
       setError(`Failed to save character: ${error.message}`);
@@ -128,10 +197,28 @@ function CharactersPage() {
 
   const startEditing = (character) => {
     setEditingCharacter(character);
+    setFormData({
+      name: character.name || '',
+      traits: character.traits || '',
+      personality: character.personality || '',
+      background: character.background || '',
+      imageUrl: character.imageUrl || ''
+    });
+    setDraftCharacter(null);
+    setHasUnsavedChanges(false);
   };
 
   const cancelEditing = () => {
     setEditingCharacter(null);
+    setDraftCharacter(null);
+    setHasUnsavedChanges(false);
+    setFormData({
+      name: '',
+      traits: '',
+      personality: '',
+      background: '',
+      imageUrl: ''
+    });
   };
 
   const handleDeleteCharacter = async (characterId) => {
@@ -150,23 +237,21 @@ function CharactersPage() {
     }
   };
 
-  const handleBulkSave = async (updatedCharacters) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      await saveCharacters(updatedCharacters);
-      setCharacters(updatedCharacters);
-    } catch (error) {
-      console.error("Error bulk saving characters:", error);
-      setError(`Failed to bulk save characters: ${error.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const loadMoreCharacters = () => {
     setPage(prev => prev + 1);
   };
+
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   return (
     <div className="characters-page">
@@ -182,9 +267,10 @@ function CharactersPage() {
           <h2>{editingCharacter ? 'Edit Character' : 'Create New Character'}</h2>
           <CharacterForm
             onSave={handleSaveCharacter}
-            initialCharacter={editingCharacter}
+            initialCharacter={editingCharacter || formData}
             onCancel={cancelEditing}
             isEditing={!!editingCharacter}
+            onChange={handleFormChange}
           />
         </div>
         <div className="characters-list">

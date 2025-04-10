@@ -1,5 +1,10 @@
 // src/utils/memory/campaignMemoryManager.js
-import { addMemory, getRelevantMemories, getTimeAgo  } from './memoryManager';
+import { 
+  addMemory, 
+  getRelevantMemories, 
+  getTimeAgo, 
+  getRelevantMemoriesByType 
+} from './memoryManager';
 
 // Store campaign-specific memories
 export const addCampaignMemory = async (characterId, campaignId, content, type, importance = 6) => {
@@ -117,10 +122,7 @@ export const getSpecificCampaignMemories = async (
   memoryTypes = []
 ) => {
   try {
-    // Import the necessary functions
-    const { getRelevantMemoriesByType } = await import('./memoryManager');
-    
-    // Get memories filtered by type
+    // Use the imported function directly instead of dynamic import
     const memories = await getRelevantMemoriesByType(
       characterId,
       context,

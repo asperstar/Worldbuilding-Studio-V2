@@ -1,17 +1,19 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { auth } from '../firebase';
 import { onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { doc, getDoc, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../firebase';
 
-import { 
-  loadCharacters, 
+import {
+  loadCharacters,
   saveCharacter,
   saveCharacters,
   deleteCharacter,
   loadEnvironments,
   saveEnvironments,
   loadWorlds,
-  loadMapData,
   saveMapData,
+  loadMapData,
   loadTimelineData,
   saveTimelineData,
   loadCampaign,
@@ -39,39 +41,48 @@ export function StorageProvider({ children }) {
   });
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      setIsLoading(false);
-      
-      if (user) {
-        testFirebaseConnection();
+    // Auth state listener
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      (user) => {
+        setCurrentUser(user);
+        setIsLoading(false); // Fix: Use setIsLoading instead of setLoading
+      },
+      (authError) => {
+        setError(authError.message);
+        setIsLoading(false); // Fix: Use setIsLoading instead of setLoading
       }
-    });
+    );
 
     return unsubscribe;
   }, []);
-  
+
   const testFirebaseConnection = async () => {
     try {
       const result = await testStorage();
-      setFirebaseStatus({ 
-        tested: true, 
-        working: result.success 
-      });
-      
+      // Update state in a safer way
+      setFirebaseStatus((prev) => ({
+        ...prev,
+        tested: true,
+        working: result.success
+      }));
+  
       if (!result.success) {
         console.error('Firebase connection test failed:', result.error);
         setError(`Firebase connection error: ${result.error}`);
       } else {
         setError(null);
       }
+      return result.success;
     } catch (err) {
       console.error('Error during Firebase connection test:', err);
-      setFirebaseStatus({
+      setFirebaseStatus((prev) => ({
+        ...prev,
         tested: true,
         working: false
-      });
+      }));
       setError(`Failed to test Firebase connection: ${err.message}`);
+      return false;
     }
   };
 
@@ -82,8 +93,8 @@ export function StorageProvider({ children }) {
       await testFirebaseConnection();
       return true;
     } catch (error) {
-      let errorMessage = "Authentication failed";
-      switch(error.code) {
+      let errorMessage = 'Authentication failed';
+      switch (error.code) {
         case 'auth/invalid-email':
           errorMessage = 'Invalid email address format.';
           break;
@@ -97,7 +108,7 @@ export function StorageProvider({ children }) {
           errorMessage = 'Incorrect password.';
           break;
         default:
-          errorMessage = error.message || "Authentication failed";
+          errorMessage = error.message || 'Authentication failed';
       }
       setError(errorMessage);
       return false;
@@ -111,8 +122,8 @@ export function StorageProvider({ children }) {
       await testFirebaseConnection();
       return true;
     } catch (error) {
-      let errorMessage = "Registration failed";
-      switch(error.code) {
+      let errorMessage = 'Registration failed';
+      switch (error.code) {
         case 'auth/email-already-in-use':
           errorMessage = 'This email is already in use.';
           break;
@@ -123,7 +134,7 @@ export function StorageProvider({ children }) {
           errorMessage = 'Password is too weak. Please use at least 6 characters.';
           break;
         default:
-          errorMessage = error.message || "Registration failed";
+          errorMessage = error.message || 'Registration failed';
       }
       setError(errorMessage);
       return false;
@@ -157,7 +168,7 @@ export function StorageProvider({ children }) {
       await sendPasswordResetEmail(auth, email);
       return true;
     } catch (error) {
-      let errorMessage = "Failed to send password reset email";
+      let errorMessage = 'Failed to send password reset email';
       switch (error.code) {
         case 'auth/invalid-email':
           errorMessage = 'Invalid email address format.';
@@ -166,7 +177,7 @@ export function StorageProvider({ children }) {
           errorMessage = 'No account found with this email.';
           break;
         default:
-          errorMessage = error.message || "Failed to send password reset email";
+          errorMessage = error.message || 'Failed to send password reset email';
       }
       setError(errorMessage);
       return false;
@@ -174,21 +185,25 @@ export function StorageProvider({ children }) {
   };
 
   const getCharacters = async (projectId, forceRefresh = false) => {
-    if (!currentUser) return [];
-    
+    if (!currentUser) {
+      setError('User not authenticated. Please log in.');
+      return [];
+    }
+
     const now = new Date();
     const cacheExpiry = 5 * 60 * 1000;
-    
-    if (!forceRefresh && 
-        cachedData.characters && 
-        cachedData.lastFetched.characters && 
-        (now - cachedData.lastFetched.characters) < cacheExpiry) {
+
+    if (
+      !forceRefresh &&
+      cachedData.characters &&
+      cachedData.lastFetched.characters &&
+      now - cachedData.lastFetched.characters < cacheExpiry
+    ) {
       return cachedData.characters;
     }
-    
+
     try {
       const characters = await loadCharacters(currentUser.uid, projectId || null);
-      
       setCachedData(prev => ({
         ...prev,
         characters,
@@ -197,12 +212,15 @@ export function StorageProvider({ children }) {
           characters: now
         }
       }));
-      
       return characters;
     } catch (error) {
-      console.error("Error fetching characters:", error);
+      console.error('Error fetching characters:', error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
+      } else if (error.code === 'unavailable') {
+        setError('Network error. Please check your internet connection and try again.');
+      } else {
+        setError('Failed to fetch characters. Please try again.');
       }
       return [];
     }
@@ -213,7 +231,10 @@ export function StorageProvider({ children }) {
   };
 
   const saveAllCharacters = async (characters) => {
-    if (!currentUser) return false;
+    if (!currentUser) {
+      setError('User not authenticated. Please log in.');
+      return false;
+    }
     try {
       await saveCharacters(characters);
       setCachedData(prev => ({
@@ -226,16 +247,21 @@ export function StorageProvider({ children }) {
       }));
       return true;
     } catch (error) {
-      console.error("Error saving characters:", error);
+      console.error('Error saving characters:', error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
+      } else {
+        setError('Failed to save characters. Please try again.');
       }
       return false;
     }
   };
 
   const saveOneCharacter = async (character) => {
-    if (!currentUser) return false;
+    if (!currentUser) {
+      setError('User not authenticated. Please log in.');
+      return false;
+    }
     try {
       await saveCharacter(character);
       if (cachedData.characters) {
@@ -257,16 +283,21 @@ export function StorageProvider({ children }) {
       }
       return true;
     } catch (error) {
-      console.error("Error saving character:", error);
+      console.error('Error saving character:', error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
+      } else {
+        setError('Failed to save character. Please try again.');
       }
       return false;
     }
   };
 
   const removeCharacter = async (characterId) => {
-    if (!currentUser) return false;
+    if (!currentUser) {
+      setError('User not authenticated. Please log in.');
+      return false;
+    }
     try {
       await deleteCharacter(characterId);
       if (cachedData.characters) {
@@ -281,30 +312,36 @@ export function StorageProvider({ children }) {
       }
       return true;
     } catch (error) {
-      console.error("Error deleting character:", error);
+      console.error('Error deleting character:', error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
+      } else {
+        setError('Failed to delete character. Please try again.');
       }
       return false;
     }
   };
 
   const getEnvironments = async (projectId, forceRefresh = false) => {
-    if (!currentUser) return [];
-    
+    if (!currentUser) {
+      setError('User not authenticated. Please log in.');
+      return [];
+    }
+
     const now = new Date();
     const cacheExpiry = 5 * 60 * 1000;
-    
-    if (!forceRefresh && 
-        cachedData.environments && 
-        cachedData.lastFetched.environments && 
-        (now - cachedData.lastFetched.environments) < cacheExpiry) {
+
+    if (
+      !forceRefresh &&
+      cachedData.environments &&
+      cachedData.lastFetched.environments &&
+      now - cachedData.lastFetched.environments < cacheExpiry
+    ) {
       return cachedData.environments;
     }
-    
+
     try {
       const environments = await loadEnvironments(currentUser.uid, projectId || null);
-      
       setCachedData(prev => ({
         ...prev,
         environments,
@@ -313,12 +350,15 @@ export function StorageProvider({ children }) {
           environments: now
         }
       }));
-      
       return environments;
     } catch (error) {
-      console.error("Error fetching environments:", error);
+      console.error('Error fetching environments:', error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
+      } else if (error.code === 'unavailable') {
+        setError('Network error. Please check your internet connection and try again.');
+      } else {
+        setError('Failed to fetch environments. Please try again.');
       }
       return [];
     }
@@ -329,7 +369,10 @@ export function StorageProvider({ children }) {
   };
 
   const saveAllEnvironments = async (environments) => {
-    if (!currentUser) return false;
+    if (!currentUser) {
+      setError('User not authenticated. Please log in.');
+      return false;
+    }
     try {
       await saveEnvironments(environments);
       setCachedData(prev => ({
@@ -342,27 +385,57 @@ export function StorageProvider({ children }) {
       }));
       return true;
     } catch (error) {
-      console.error("Error saving environments:", error);
+      console.error('Error saving environments:', error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
+      } else {
+        setError('Failed to save environments. Please try again.');
       }
       return false;
     }
   };
 
+  const getWorldById = async (worldId) => {
+    if (!currentUser) {
+      setError('User not authenticated. Please log in.');
+      return null;
+    }
+    try {
+      const worldRef = doc(db, 'worlds', worldId);
+      const worldSnap = await getDoc(worldRef);
+      if (worldSnap.exists()) {
+        return { id: worldSnap.id, ...worldSnap.data() };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching world by ID:', error);
+      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
+        setError('Authentication error. Please log in again.');
+      } else {
+        setError('Failed to fetch world. Please try again.');
+      }
+      return null;
+    }
+  };
+
   const getWorlds = async (forceRefresh = false) => {
-    if (!currentUser) return [];
-    
+    if (!currentUser) {
+      setError('User not authenticated. Please log in.');
+      return [];
+    }
+
     const now = new Date();
     const cacheExpiry = 5 * 60 * 1000;
-    
-    if (!forceRefresh && 
-        cachedData.worlds && 
-        cachedData.lastFetched.worlds && 
-        (now - cachedData.lastFetched.worlds) < cacheExpiry) {
+
+    if (
+      !forceRefresh &&
+      cachedData.worlds &&
+      cachedData.lastFetched.worlds &&
+      now - cachedData.lastFetched.worlds < cacheExpiry
+    ) {
       return cachedData.worlds;
     }
-    
+
     try {
       const worlds = await loadWorlds();
       setCachedData(prev => ({
@@ -375,109 +448,148 @@ export function StorageProvider({ children }) {
       }));
       return worlds;
     } catch (error) {
-      console.error("Error fetching worlds:", error);
+      console.error('Error fetching worlds:', error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
+      } else if (error.code === 'unavailable') {
+        setError('Network error. Please check your internet connection and try again.');
+      } else {
+        setError('Failed to fetch worlds. Please try again.');
       }
       return [];
     }
   };
 
   const getMapData = async () => {
-    if (!currentUser) return { nodes: [], edges: [] };
-    
+    if (!currentUser) {
+      setError('User not authenticated. Please log in.');
+      return { nodes: [], edges: [] };
+    }
+
     try {
       const mapData = await loadMapData();
       console.log('Map data fetched in getMapData:', mapData);
       return mapData;
     } catch (error) {
-      console.error("Error loading map data:", error);
+      console.error('Error loading map data:', error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
+      } else {
+        setError('Failed to load map data. Please try again.');
       }
       return { nodes: [], edges: [], imageUrl: '' };
     }
   };
 
   const updateMapData = async (mapData) => {
-    if (!currentUser) return false;
-    
+    if (!currentUser) {
+      setError('User not authenticated. Please log in.');
+      return false;
+    }
+
     try {
       return await saveMapData(currentUser.uid, mapData);
     } catch (error) {
-      console.error("Error saving map data:", error);
+      console.error('Error saving map data:', error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
+      } else {
+        setError('Failed to save map data. Please try again.');
       }
       return false;
     }
   };
 
   const getTimelineData = async () => {
-    if (!currentUser) return { events: [], sequences: ['Main Timeline'] };
-    
+    if (!currentUser) {
+      setError('User not authenticated. Please log in.');
+      return { events: [], sequences: ['Main Timeline'] };
+    }
+
     try {
       return await loadTimelineData();
     } catch (error) {
-      console.error("Error loading timeline data:", error);
+      console.error('Error loading timeline data:', error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
+      } else {
+        setError('Failed to load timeline data. Please try again.');
       }
       return { events: [], sequences: ['Main Timeline'] };
     }
   };
 
   const updateTimelineData = async (timelineData) => {
-    if (!currentUser) return false;
-    
+    if (!currentUser) {
+      setError('User not authenticated. Please log in.');
+      return false;
+    }
+
     try {
       return await saveTimelineData(currentUser.uid, timelineData);
     } catch (error) {
-      console.error("Error saving timeline data:", error);
+      console.error('Error saving timeline data:', error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
+      } else {
+        setError('Failed to save timeline data. Please try again.');
       }
       return false;
     }
   };
 
   const getCampaign = async (campaignId) => {
-    if (!currentUser) return null;
-    
+    if (!currentUser) {
+      setError('User not authenticated. Please log in.');
+      return null;
+    }
+
     try {
       return await loadCampaign(campaignId);
     } catch (error) {
       console.error(`Error loading campaign ${campaignId}:`, error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
+      } else {
+        setError('Failed to load campaign. Please try again.');
       }
       return null;
     }
   };
 
   const updateCampaign = async (campaign) => {
-    if (!currentUser) return false;
-    
+    if (!currentUser) {
+      setError('User not authenticated. Please log in.');
+      return false;
+    }
+
     try {
       return await saveCampaign(campaign);
     } catch (error) {
-      console.error("Error saving campaign:", error);
+      console.error('Error saving campaign:', error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
+      } else {
+        setError('Failed to save campaign. Please try again.');
       }
       return false;
     }
   };
 
   const getWorldCampaigns = async (worldId) => {
-    if (!currentUser) return [];
-    
+    if (!currentUser) {
+      setError('User not authenticated. Please log in.');
+      return [];
+    }
+
     try {
       return await loadWorldCampaigns(worldId);
     } catch (error) {
       console.error(`Error loading campaigns for world ${worldId}:`, error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
+      } else {
+        setError('Failed to load campaigns for world. Please try again.');
       }
       return [];
     }
@@ -492,7 +604,7 @@ export function StorageProvider({ children }) {
     login,
     signup,
     logout,
-    sendPasswordReset, // Add the new method
+    sendPasswordReset,
     getCharacters,
     getAllCharacters,
     saveAllCharacters,
@@ -501,6 +613,7 @@ export function StorageProvider({ children }) {
     getEnvironments,
     getAllEnvironments,
     saveAllEnvironments,
+    getWorldById,
     getWorlds,
     getMapData,
     updateMapData,

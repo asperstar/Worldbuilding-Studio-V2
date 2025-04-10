@@ -5,6 +5,8 @@ import { HashRouter, Routes, Route } from 'react-router-dom';
 import { StorageProvider } from './contexts/StorageContext';
 import { Link } from 'react-router-dom';
 import './App.css';
+import { db } from './firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 // Import components and pages
 import Dashboard from './pages/Dashboard';
@@ -28,12 +30,13 @@ import DebugPage from './pages/DebugPage';
 import DecorativeElements from './components/DecorativeElements';
 import AzgaarMapIframe from './components/maps/AzgaarMapIframe';
 import LoginPage from 'pages/LoginPage';
+import WorldSelectionPage from './pages/WorldSelectionPage'; // Add this import
 
 function App() {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setIsLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  
+
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
@@ -41,15 +44,15 @@ function App() {
   useEffect(() => {
     if (!auth) {
       console.error('Firebase auth is not initialized');
-      setLoading(false);
+      setIsLoading(false);
       return;
     }
-    
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      setLoading(false);
+      setIsLoading(false);
     });
-    
+
     return () => unsubscribe();
   }, []);
 
@@ -69,16 +72,16 @@ function App() {
           {user ? (
             <>
               <DecorativeElements />
-              
+
               {/* Toggle Button */}
-              <button 
-                className="sidebar-toggle-button" 
+              <button
+                className="sidebar-toggle-button"
                 onClick={toggleSidebar}
                 aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
               >
                 {isSidebarOpen ? '✖' : '☰'}
               </button>
-              
+
               {/* Sidebar Navigation */}
               <nav className={`sidebar ${isSidebarOpen ? 'open' : 'closed'}`}>
                 <h1>Worldbuilding Studio</h1>
@@ -96,7 +99,7 @@ function App() {
                   <li><Link to="/documentation" onClick={() => setIsSidebarOpen(false)}>Documentation</Link></li>
                 </ul>
               </nav>
-              
+
               {/* Main Content */}
               <main className={`main-content ${isSidebarOpen ? 'main-content-with-sidebar' : 'main-content-full'}`}>
                 <ErrorSuppressor>
@@ -106,7 +109,8 @@ function App() {
                     <Route path="/characters" element={<ProtectedRoute><CharactersPage /></ProtectedRoute>} />
                     <Route path="/characters/:characterId/memories" element={<ProtectedRoute><CharacterMemoriesPage /></ProtectedRoute>} />
                     <Route path="/environments" element={<ProtectedRoute><EnvironmentsPage /></ProtectedRoute>} />
-                    <Route path="/map" element={<ProtectedRoute><MapPage /></ProtectedRoute>} />
+                    <Route path="/map" element={<ProtectedRoute><WorldSelectionPage /></ProtectedRoute>} /> {/* Updated to WorldSelectionPage */}
+                    <Route path="/map/:worldId" element={<ProtectedRoute><MapPage /></ProtectedRoute>} /> {/* Add ProtectedRoute */}
                     <Route path="/timeline" element={<ProtectedRoute><TimelinePage /></ProtectedRoute>} />
                     <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
                     <Route path="/import-export" element={<ProtectedRoute><ImportExportPage /></ProtectedRoute>} />
@@ -114,7 +118,7 @@ function App() {
                     <Route path="/worlds/:worldId/campaigns" element={<ProtectedRoute><CampaignsPage /></ProtectedRoute>} />
                     <Route path="/campaigns/:campaignId/session" element={<ProtectedRoute><CampaignSessionPage /></ProtectedRoute>} />
                     <Route path="/campaigns" element={<ProtectedRoute><CampaignsIndexPage /></ProtectedRoute>} />
-                    <Route path="/worlds/:worldId/map/fantasy" element={<ProtectedRoute><AzgaarMapIframe /></ProtectedRoute>} /> 
+                    <Route path="/worlds/:worldId/map/fantasy" element={<ProtectedRoute><AzgaarMapIframe /></ProtectedRoute>} />
                     <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
                     <Route path="/documentation" element={<ProtectedRoute><DocumentationPage /></ProtectedRoute>} />
                     <Route path="/debug" element={<ProtectedRoute><DebugPage /></ProtectedRoute>} />

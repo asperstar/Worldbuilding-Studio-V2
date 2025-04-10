@@ -5,6 +5,8 @@ import { collection, getDocs, setDoc, doc, addDoc, deleteDoc, query, where } fro
 import { useStorage } from '../contexts/StorageContext';
 import './TimelinePage.css';
 
+
+
 function TimelinePage() {
   const { currentUser } = useStorage();
   const [worlds, setWorlds] = useState([]);
@@ -163,18 +165,21 @@ function TimelinePage() {
   }, [selectedWorld, currentUser]);
 
   const createTimeline = async () => {
-    if (!newTimelineName.trim()) {
-      alert('Please enter a timeline name.');
+    if (!newTimelineName.trim() || !selectedWorld) {
+      alert('Please enter a timeline name and select a world.');
       return;
     }
-
+  
     try {
+      setLoading(true);
       const newTimeline = {
         name: newTimelineName.trim(),
         userId: currentUser.uid,
         worldId: selectedWorld.id,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        updated: new Date().toISOString()
       };
+      
       const timelineRef = await addDoc(collection(db, 'timelines'), newTimeline);
       const createdTimeline = { ...newTimeline, id: timelineRef.id };
       setTimelines([...timelines, createdTimeline]);
@@ -185,6 +190,8 @@ function TimelinePage() {
     } catch (err) {
       console.error('Error creating timeline:', err);
       setError('Failed to create timeline.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -235,18 +242,21 @@ function TimelinePage() {
   };
 
   const addPeriod = async () => {
-    if (!newPeriod.title.trim()) {
-      alert('Please enter a period title.');
+    if (!newPeriod.title.trim() || !selectedTimeline) {
+      alert('Please enter a period title and select a timeline.');
       return;
     }
-
+  
     try {
+      setLoading(true);
       const periodData = {
         ...newPeriod,
         timelineId: selectedTimeline.id,
-        userId: currentUser.uid, // Add userId to match Firebase rules
-        createdAt: new Date().toISOString()
+        userId: currentUser.uid,
+        createdAt: new Date().toISOString(),
+        updated: new Date().toISOString()
       };
+      
       const periodRef = await addDoc(collection(db, 'periods'), periodData);
       setPeriods([...periods, { ...periodData, id: periodRef.id }]);
       setNewPeriod({
@@ -259,6 +269,8 @@ function TimelinePage() {
     } catch (err) {
       console.error('Error adding period:', err);
       setError('Failed to add period.');
+    } finally {
+      setLoading(false);
     }
   };
 

@@ -10,13 +10,13 @@ const ensureAuthenticated = async (retries = 3) => {
   for (let i = 0; i < retries; i++) {
     const user = auth.currentUser;
     if (user) {
-      return user;
+      // Return only the user ID string
+      return user.uid;
     }
     
-    // If no user and we have retries left, wait a bit
     if (i < retries - 1) {
       console.log(`Auth not ready, retry ${i+1}/${retries}...`);
-      await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
   }
   

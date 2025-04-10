@@ -1,6 +1,6 @@
 {
   "name": "worldbuilding-app",
-  "proxy": "https://my-backend-jet-two-zoe-leonhardt-projects.vercel.app",
+  "proxy": "http://localhost:3002",
   "version": "0.1.0",
   "private": true,
   "homepage": "https://worldbuilding-app-plum.vercel.app/",
@@ -16,6 +16,7 @@
     "firebase": "^11.6.0",
     "firebase-admin": "^13.2.0",
     "firebase-functions": "^6.3.2",
+    "lodash": "^4.17.21",
     "netlify": "^13.3.4",
     "node-fetch": "^3.3.2",
     "openai": "^4.91.0",
@@ -24,10 +25,13 @@
     "react-router-dom": "^6.16.0",
     "react-scripts": "^5.0.1",
     "reactflow": "^11.11.4",
+    "replicate": "^1.0.1",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "cross-env PORT=55596 react-scripts start",
+  "start": "cross-env PORT=3000 react-scripts start",
+  "start:backend": "node server/index.js",
+  "dev": "concurrently \"npm run start\" \"npm run start:backend\"",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",

@@ -1,41 +1,42 @@
-// src/pages/CharacterMemoriesPage.js
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { getCharacterMemories, removeMemory, MEMORY_TYPES } from '../utils/memory/memoryManager';
 import { loadCharacters } from '../utils/storageExports';
+import { useStorage } from '../contexts/StorageContext';
 
 function CharacterMemoriesPage() {
   const { characterId } = useParams();
+  const { currentUser } = useStorage();
   const [character, setCharacter] = useState(null);
   const [memories, setMemories] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+  const [error, setError] = useState(null);
+
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      
       try {
-        // Load character - Convert to async/await since loadCharacters should return a Promise
-        const characters = await loadCharacters();
+        const characters = await loadCharacters(currentUser);
         const foundCharacter = characters.find(c => c.id.toString() === characterId);
         setCharacter(foundCharacter);
-        
-        // Load memories only if we found a character
+
         if (foundCharacter) {
           const characterMemories = await getCharacterMemories(characterId);
           setMemories(characterMemories);
         }
       } catch (error) {
         console.error("Error loading character data:", error);
-        // You could add error state handling here
+        setError("Failed to load character data.");
       } finally {
         setLoading(false);
       }
     };
-    
-    loadData();
-  }, [characterId]);
-  
+
+    if (currentUser) {
+      loadData();
+    }
+  }, [characterId, currentUser]);
+
   const handleDeleteMemory = async (memoryId) => {
     const confirmed = window.confirm('Are you sure you want to delete this memory?');
     if (confirmed) {
@@ -44,11 +45,11 @@ function CharacterMemoriesPage() {
         setMemories(prevMemories => prevMemories.filter(memory => memory.id !== memoryId));
       } catch (error) {
         console.error("Error deleting memory:", error);
-        // Add error handling for the user, like a toast notification
+        setError("Failed to delete memory.");
       }
     }
   };
-  
+
   const getTypeLabel = (type) => {
     const labels = {
       [MEMORY_TYPES.FACT]: 'Fact',
@@ -59,19 +60,19 @@ function CharacterMemoriesPage() {
     };
     return labels[type] || type;
   };
-  
+
   if (loading) {
     return <div className="loading">Loading...</div>;
   }
-  
+
   if (!character) {
     return <div className="not-found">Character not found</div>;
   }
-  
+
   return (
     <div className="memories-page">
       <h1>{character.name}'s Memories</h1>
-      
+      {error && <div className="error-message">{error}</div>}
       <div className="memories-container">
         {memories.length === 0 ? (
           <p className="no-memories">No memories stored yet. Chat with this character to create memories.</p>
@@ -84,8 +85,8 @@ function CharacterMemoriesPage() {
                   <span className="memory-timestamp">
                     {memory?.timestamp ? new Date(memory.timestamp).toLocaleString() : 'Unknown date'}
                   </span>
-                  <button 
-                    className="delete-memory" 
+                  <button
+                    className="delete-memory"
                     onClick={() => handleDeleteMemory(memory.id)}
                   >
                     Delete

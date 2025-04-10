@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom';
 import WorldForm from '../components/worlds/WorldForm';
 import { loadWorlds, saveWorlds, deleteWorld } from '../utils/storageExports';
 import { useStorage } from '../contexts/StorageContext';
+import { useCallback } from 'react';
+import debounce from 'lodash/debounce';
 
 function WorldsPage() {
   const [worlds, setWorlds] = useState([]);
@@ -14,7 +16,47 @@ function WorldsPage() {
   const [error, setError] = useState(null);
   
   const { currentUser } = useStorage();
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+const [draftWorld, setDraftWorld] = useState(null);
   
+
+const autoSave = useCallback(debounce(async (worldData) => {
+  if (!currentUser || !worldData.name) return;
+  
+  try {
+    const worldToSave = {
+      ...worldData,
+      userId: currentUser.uid,
+      isDraft: true,
+      updated: new Date().toISOString()
+    };
+    
+    if (!draftWorld) {
+      worldToSave.id = Date.now();
+      await saveWorlds([worldToSave]);
+      setDraftWorld(worldToSave);
+    } else {
+      const updatedWorld = { ...draftWorld, ...worldToSave };
+      await saveWorlds([updatedWorld]);
+      setDraftWorld(updatedWorld);
+    }
+  } catch (error) {
+    console.error('Error auto-saving world:', error);
+    setError('Failed to auto-save world.');
+  }
+}, 1000), [currentUser, draftWorld]);
+useEffect(() => {
+  const handleBeforeUnload = (e) => {
+    if (hasUnsavedChanges) {
+      e.preventDefault();
+      e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+    }
+  };
+  
+  window.addEventListener('beforeunload', handleBeforeUnload);
+  return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+}, [hasUnsavedChanges]);
+
   // Load worlds on component mount
   useEffect(() => {
     const fetchWorlds = async () => {

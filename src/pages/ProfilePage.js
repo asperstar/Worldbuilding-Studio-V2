@@ -4,6 +4,9 @@ import { useStorage } from '../contexts/StorageContext';
 import { getUserProfile, updateUserProfile } from '../utils/firebaseStorage';
 import { migrateLocalStorageToFirebase } from '../utils/dataMigration';
 
+
+
+
 function ProfilePage() {
   const { currentUser, logout } = useStorage();
   const [profile, setProfile] = useState({
@@ -18,19 +21,27 @@ function ProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
   const [migrationResult, setMigrationResult] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
   
   useEffect(() => {
     const loadProfile = async () => {
-      const userProfile = await getUserProfile();
-      if (userProfile) {
-        setProfile({
-          displayName: userProfile.displayName || '',
-          bio: userProfile.bio || '',
-          preferences: userProfile.preferences || {
-            theme: 'dark',
-            showTutorials: true
-          }
-        });
+      setIsLoading(true);
+      try {
+        const userProfile = await getUserProfile();
+        if (userProfile) {
+          setProfile({
+            displayName: userProfile.displayName || '',
+            bio: userProfile.bio || '',
+            preferences: userProfile.preferences || {
+              theme: 'dark',
+              showTutorials: true
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error loading profile:', error);
+      } finally {
+        setIsLoading(false);
       }
     };
     
@@ -61,10 +72,14 @@ function ProfilePage() {
   const saveProfile = async () => {
     setIsSaving(true);
     try {
-      await updateUserProfile(profile);
+      await updateUserProfile({
+        ...profile,
+        updated: new Date().toISOString()
+      });
       setIsEditing(false);
     } catch (error) {
       console.error('Error saving profile:', error);
+      // Consider adding an error state and showing it to the user
     } finally {
       setIsSaving(false);
     }

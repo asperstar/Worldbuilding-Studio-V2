@@ -8,7 +8,8 @@ const ensureAuthenticated = async (retries = 3) => {
   for (let i = 0; i < retries; i++) {
     const user = auth.currentUser;
     if (user) {
-      return user;
+      // Return only the user ID string
+      return user.uid;
     }
     
     if (i < retries - 1) {
@@ -21,10 +22,21 @@ const ensureAuthenticated = async (retries = 3) => {
 };
 
 // World functions
+// In storageExports.js
 export const loadWorlds = async (userId = null) => {
   try {
-    const user = await ensureAuthenticated();
-    const userIdToUse = userId || user.uid;
+    // Get current user's ID if not provided
+    let userIdToUse = userId;
+    if (!userIdToUse) {
+      const user = await ensureAuthenticated();
+      userIdToUse = user; // This is now the user ID string from our updated function
+    }
+    
+    // Make sure we have a valid user ID before querying
+    if (!userIdToUse) {
+      console.error('No user ID available for query');
+      return []; // Return empty array instead of attempting a query
+    }
     
     const worldsQuery = query(collection(db, 'worlds'), where('userId', '==', userIdToUse));
     const worldsSnapshot = await getDocs(worldsQuery);
@@ -121,48 +133,42 @@ export const loadWorldCampaigns = async (worldId, userId = null) => {
   }
 };
 
-export const loadCampaigns = async (userId = null) => {
-  try {
-    const user = await ensureAuthenticated();
-    const userIdToUse = userId || user.uid;
-    
-    const campaignsQuery = query(collection(db, 'campaigns'), where('userId', '==', userIdToUse));
-    const campaignsSnapshot = await getDocs(campaignsQuery);
-    const campaigns = campaignsSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-    return campaigns;
-  } catch (error) {
-    console.error('Error loading campaigns from Firestore:', error);
-    throw error;
-  }
-};
-
 export const loadCampaign = async (campaignId, userId = null) => {
   try {
     const user = await ensureAuthenticated();
-    const userIdToUse = userId || user.uid;
-    
-    const campaignDoc = await getDoc(doc(db, 'campaigns', campaignId.toString()));
-    if (campaignDoc.exists()) {
-      const campaignData = {
-        id: campaignDoc.id,
-        ...campaignDoc.data()
-      };
-      if (campaignData.userId !== userIdToUse) {
-        throw new Error('Unauthorized access to campaign');
-      }
-      return campaignData;
-    } else {
-      console.error(`Campaign with ID ${campaignId} not found`);
-      return null;
+    const userIdToUse = userId || user;
+
+    console.log(`Attempting to load campaign with ID: ${campaignId} for user: ${userIdToUse}`);
+
+    const campaignRef = doc(db, 'campaigns', campaignId);
+    const campaignDoc = await getDoc(campaignRef);
+
+    if (!campaignDoc.exists()) {
+      console.error(`Campaign with ID ${campaignId} not found in Firestore`);
+      throw new Error(`Campaign with ID ${campaignId} not found`);
     }
+
+    const campaignData = {
+      id: campaignDoc.id,
+      ...campaignDoc.data()
+    };
+
+    console.log(`Loaded campaign data:`, campaignData);
+
+    if (campaignData.userId !== userIdToUse) {
+      console.error(`Unauthorized access: campaign userId (${campaignData.userId}) does not match authenticated user (${userIdToUse})`);
+      throw new Error(`Unauthorized access to campaign with ID ${campaignId}`);
+    }
+
+    return campaignData;
   } catch (error) {
     console.error('Error loading campaign from Firestore:', error);
     throw error;
   }
 };
+
+
+
 
 export const saveCampaign = async (campaign, userId = null) => {
   try {

@@ -1,0 +1,60 @@
+.world-selection-page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background-color: var(--dark-bg);
+    color: var(--white);
+    padding: 20px;
+  }
+  
+  .world-selection-page h1 {
+    font-size: 2rem;
+    margin-bottom: 20px;
+    color: var(--teal);
+  }
+  
+  .world-list {
+    list-style: none;
+    padding: 0;
+    width: 100%;
+    max-width: 400px;
+  }
+  
+  .world-item {
+    margin-bottom: 10px;
+  }
+  
+  .world-item button {
+    width: 100%;
+    padding: 10px;
+    background-color: var(--teal);
+    color: var(--black);
+    border: none;
+    border-radius: 5px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background-color 0.3s;
+  }
+  
+  .world-item button:hover {
+    background-color: var(--purple);
+    color: var(--white);
+  }
+  
+  .create-world-btn {
+    margin-top: 20px;
+    padding: 10px 20px;
+    background-color: var(--purple);
+    color: var(--white);
+    border: none;
+    border-radius: 5px;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  
+  .create-world-btn:hover {
+    background-color: var(--teal);
+    color: var(--black);
+  }
