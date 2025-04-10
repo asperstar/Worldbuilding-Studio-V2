@@ -10,7 +10,7 @@
     }
   ],
     "functions": {
-      "api/index.js": {
+      "index.js": {
         "memory": 128,
         "maxDuration": 10
       }
@@ -26,7 +26,7 @@
     },
     {
       "src": "/(.*)",
-       "dest": "/api/index.js"
+       "dest": "index.js"
     }
   ]
 }
