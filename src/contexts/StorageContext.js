@@ -265,7 +265,7 @@ export function StorageProvider({ children }) {
       return false;
     }
     try {
-      await saveCharacters(characters);
+      await saveCharacters(characters, currentUser.uid); // Pass UID instead of currentUser
       setCachedData(prev => ({
         ...prev,
         characters,
@@ -292,7 +292,7 @@ export function StorageProvider({ children }) {
       return false;
     }
     try {
-      await saveCharacter(character);
+      await saveCharacter(character, currentUser.uid); // Pass UID instead of currentUser
       if (cachedData.characters) {
         const updatedCharacters = [...cachedData.characters];
         const index = updatedCharacters.findIndex(c => c.id === character.id);
@@ -403,7 +403,7 @@ export function StorageProvider({ children }) {
       return false;
     }
     try {
-      await saveEnvironments(environments);
+      await saveEnvironments(environments, currentUser.uid); // Pass UID instead of currentUser
       setCachedData(prev => ({
         ...prev,
         environments,
@@ -423,7 +423,6 @@ export function StorageProvider({ children }) {
       return false;
     }
   };
-
   const getWorldById = async (worldId) => {
     if (!currentUser) {
       setError('User not authenticated. Please log in.');

@@ -5,6 +5,80 @@ const app = express();
 const port = process.env.PORT || 3002;
 
 const cors = require('cors');
+const fetch = require('node-fetch'); // For making HTTP requests to Claude API
+
+
+
+// Vercel serverless functions don't need express for simple APIs
+module.exports = async (req, res) => {
+  // Enable CORS for all origins temporarily (for debugging)
+  const corsMiddleware = cors({
+    origin: '*', // Allow all origins for now; tighten this later
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  });
+
+  // Apply CORS middleware
+  corsMiddleware(req, res, async () => {
+    // Log incoming requests for debugging
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    console.log('Headers:', req.headers);
+    console.log('Body:', req.body);
+
+    // Handle OPTIONS preflight requests
+    if (req.method === 'OPTIONS') {
+      res.status(200).end();
+      return;
+    }
+
+    // Only handle POST requests to /chat
+    if (req.method !== 'POST' || req.url !== '/chat') {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    try {
+      const { systemPrompt, userMessage } = req.body;
+      if (!systemPrompt || !userMessage) {
+        res.status(400).json({ error: 'Missing systemPrompt or userMessage' });
+        return;
+      }
+
+      // Claude API integration (replace with your actual API key and endpoint)
+      const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY || 'your-claude-api-key-here';
+      const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages'; // Example endpoint
+
+      const claudeResponse = await fetch(CLAUDE_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': CLAUDE_API_KEY,
+        },
+        body: JSON.stringify({
+          model: 'claude-3-opus-20240229', // Example model
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage },
+          ],
+          max_tokens: 1000,
+        }),
+      });
+
+      if (!claudeResponse.ok) {
+        throw new Error(`Claude API error: ${claudeResponse.status}`);
+      }
+
+      const claudeData = await claudeResponse.json();
+      const response = claudeData.content[0].text; // Adjust based on Claude API response structure
+
+      res.status(200).json({ response });
+    } catch (error) {
+      console.error('Error in /chat endpoint:', { message: error.message, stack: error.stack });
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+};
 
 
 // Add this at the top of index.js and update the fetch URLs in CampaignSessionPage.js
@@ -33,6 +107,7 @@ const corsOptions = {
       'http://192.168.0.0:3000',
       'https://worldbuilding.studio',
       'https://www.worldbuilding.studio',
+      'https://worldbuilding-app-plum.vercel.app/',
       /\.vercel\.app$/,
     ];
     if (!origin || allowedOrigins.some(allowed =>
@@ -47,11 +122,24 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
   credentials: true,
 };
-
-app.use(cors(corsOptions));
+// Enable CORS for all routes
+app.use(cors({
+  origin: 'https://worldbuilding-app-plum.vercel.app', // Your frontend domain
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
 app.options('*', cors(corsOptions));
 
+
 app.use(express.json());
+// Log all incoming requests for debugging
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  console.log('Headers:', req.headers);
+  console.log('Body:', req.body);
+  next();
+});
 
 // Test endpoint
 app.get('/', (req, res) => {
@@ -225,7 +313,10 @@ app.post('/generate-map', async (req, res) => {
     res.status(500).json({ error: 'Failed to generate map using Replicate API' });
   }
 });
+// Handle preflight requests
+app.options('*', cors());
 
-app.listen(port, '0.0.0.0', () => {
+// Start the server
+app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });

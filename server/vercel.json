@@ -1,15 +1,14 @@
 {
-    "version": 2,
-    "builds": [
-      {
-        "src": "index.js",
-        "use": "@vercel/node"
+    "functions": {
+      "index.js": {
+        "memory": 128,
+        "maxDuration": 10
       }
-    ],
-    "routes": [
+    },
+    "rewrites": [
       {
-        "src": "/(.*)",
-        "dest": "index.js"
+        "source": "/(.*)",
+        "destination": "/index.js"
       }
     ]
   }

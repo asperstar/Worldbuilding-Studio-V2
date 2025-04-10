@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
-import { useStorage } from '../contexts/StorageContext'; // Add this import
+import { Link, useNavigate } from 'react-router-dom';
+import { useStorage } from '../contexts/StorageContext';
 
 const API_URL = process.env.NODE_ENV === 'production'
-  ? 'https://my-backend-jet-two.vercel.app'
+  ? 'https://my-backend-jet-two.vercel.app/'
   : 'http://localhost:3002';
 
 function ChatPage() {
-  const { getAllCharacters } = useStorage(); // Add this
+  const { currentUser, getAllCharacters } = useStorage();
+  const navigate = useNavigate();
   const [characters, setCharacters] = useState([]);
   const [selectedCharacter, setSelectedCharacter] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -16,18 +17,28 @@ function ChatPage() {
   const [error, setError] = useState(null);
   const messagesEndRef = useRef(null);
 
-  // Load all characters using context
+  // Check authentication and load characters
   useEffect(() => {
     const fetchCharacters = async () => {
+      if (!currentUser || !currentUser.uid) {
+        setError('User not authenticated. Please log in.');
+        navigate('/login');
+        return;
+      }
+
       try {
-        const loadedCharacters = await getAllCharacters(); // Use context method
+        setIsLoading(true);
+        const loadedCharacters = await getAllCharacters();
         setCharacters(loadedCharacters || []);
       } catch (err) {
         setError('Failed to load characters: ' + err.message);
+      } finally {
+        setIsLoading(false);
       }
     };
+
     fetchCharacters();
-  }, [getAllCharacters]); // Add dependency
+  }, [currentUser, getAllCharacters, navigate]);
 
   // Scroll to the bottom of the chat when messages change
   useEffect(() => {
@@ -40,6 +51,7 @@ function ChatPage() {
       {
         sender: 'character',
         text: `Hello! I'm ${character.name}. It's nice to meet you.`,
+        timestamp: new Date().toISOString(),
       },
     ]);
   };
@@ -47,7 +59,7 @@ function ChatPage() {
   const handleSendMessage = async () => {
     if (!input.trim() || !selectedCharacter) return;
 
-    const userMessage = { sender: 'user', text: input };
+    const userMessage = { sender: 'user', text: input, timestamp: new Date().toISOString() };
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
@@ -62,11 +74,15 @@ function ChatPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to get response from server');
+        if (response.status === 0) {
+          throw new Error('Network error: Unable to reach the server. Please check your internet connection.');
+        }
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to get response from server');
       }
 
       const data = await response.json();
-      const characterMessage = { sender: 'character', text: data.response };
+      const characterMessage = { sender: 'character', text: data.response, timestamp: new Date().toISOString() };
       setMessages((prev) => [...prev, characterMessage]);
     } catch (err) {
       setError('Failed to send message: ' + err.message);
@@ -81,6 +97,10 @@ function ChatPage() {
       handleSendMessage();
     }
   };
+
+  if (isLoading) {
+    return <div>Loading characters...</div>;
+  }
 
   return (
     <div className="chat-page">
@@ -125,7 +145,9 @@ function ChatPage() {
                     key={index}
                     className={`message ${msg.sender === 'user' ? 'user-message' : 'character-message'}`}
                   >
-                    {msg.text}
+                    <strong>{msg.sender === 'user' ? 'You' : selectedCharacter.name}</strong>{' '}
+                    <span>{new Date(msg.timestamp).toLocaleTimeString()}</span>
+                    <p>{msg.text}</p>
                   </div>
                 ))}
                 <div ref={messagesEndRef} />
@@ -148,6 +170,8 @@ function ChatPage() {
           )}
         </div>
       </div>
+
+      <Link to="/dashboard">Back to Dashboard</Link>
     </div>
   );
 }
