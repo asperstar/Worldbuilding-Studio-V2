@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useStorage } from '../contexts/StorageContext';
 import apiClient from '../utils/apiClient';
+import '../styles/CampaignSessionPage.css'; // Add this line
 
 const API_URL = process.env.NODE_ENV === 'production'
   ? 'https://my-backend-jet-two.vercel.app'
