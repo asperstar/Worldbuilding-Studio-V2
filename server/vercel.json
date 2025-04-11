@@ -7,10 +7,10 @@
     ],
     "routes": [
       {
-        "src": "/chat/?",
+        "src": "/chat(.*)",
         "methods": ["OPTIONS"],
         "headers": {
-          "Access-Control-Allow-Origin": "https://worldbuilding-app-plum.vercel.app",
+          "Access-Control-Allow-Origin": "https://worldbuilding-1a9y7m9zq-zoe-leonhards-projects.vercel.app",
           "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type,Accept,Authorization",
           "Access-Control-Allow-Credentials": "true"
@@ -19,21 +19,21 @@
         "continue": false
       },
       {
-        "src": "/chat/?", 
+        "src": "/chat(.*)",
         "methods": ["POST"],
         "dest": "/api/index.js",
         "headers": {
-          "Access-Control-Allow-Origin": "https://worldbuilding-app-plum.vercel.app",
+          "Access-Control-Allow-Origin": "https://worldbuilding-1a9y7m9zq-zoe-leonhards-projects.vercel.app",
           "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type,Accept,Authorization",
           "Access-Control-Allow-Credentials": "true"
         }
       },
       {
-        "src": "/api/chat/?",
+        "src": "/api/chat(.*)",
         "methods": ["OPTIONS"],
         "headers": {
-          "Access-Control-Allow-Origin": "https://worldbuilding-app-plum.vercel.app",
+          "Access-Control-Allow-Origin": "https://worldbuilding-1a9y7m9zq-zoe-leonhards-projects.vercel.app",
           "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type,Accept,Authorization",
           "Access-Control-Allow-Credentials": "true"
@@ -42,21 +42,21 @@
         "continue": false
       },
       {
-        "src": "/api/chat/?",
+        "src": "/api/chat(.*)",
         "methods": ["POST"],
         "dest": "/api/index.js",
         "headers": {
-          "Access-Control-Allow-Origin": "https://worldbuilding-app-plum.vercel.app",
+          "Access-Control-Allow-Origin": "https://worldbuilding-1a9y7m9zq-zoe-leonhards-projects.vercel.app",
           "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type,Accept,Authorization",
           "Access-Control-Allow-Credentials": "true"
         }
       },
       {
-        "src": "/generate-map/?",
+        "src": "/generate-map(.*)",
         "methods": ["OPTIONS"],
         "headers": {
-          "Access-Control-Allow-Origin": "https://worldbuilding-app-plum.vercel.app",
+          "Access-Control-Allow-Origin": "https://worldbuilding-1a9y7m9zq-zoe-leonhards-projects.vercel.app",
           "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type,Accept,Authorization",
           "Access-Control-Allow-Credentials": "true"
@@ -65,11 +65,11 @@
         "continue": false
       },
       {
-        "src": "/generate-map/?",
+        "src": "/generate-map(.*)",
         "methods": ["POST"],
         "dest": "/api/index.js",
         "headers": {
-          "Access-Control-Allow-Origin": "https://worldbuilding-app-plum.vercel.app",
+          "Access-Control-Allow-Origin": "https://worldbuilding-1a9y7m9zq-zoe-leonhards-projects.vercel.app",
           "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type,Accept,Authorization",
           "Access-Control-Allow-Credentials": "true"
@@ -81,5 +81,5 @@
       }
     ],
     "cleanUrls": false,
-    "trailingSlash": true 
+    "trailingSlash": true
 }
