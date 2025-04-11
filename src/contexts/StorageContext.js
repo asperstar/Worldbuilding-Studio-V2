@@ -289,10 +289,13 @@ export function StorageProvider({ children }) {
   const saveOneCharacter = async (character) => {
     if (!currentUser) {
       setError('User not authenticated. Please log in.');
+      console.error('saveOneCharacter: No authenticated user');
       return false;
     }
     try {
-      await saveCharacter(character, currentUser.uid); // Pass UID instead of currentUser
+      console.log('saveOneCharacter: Saving character with data:', character);
+      console.log('saveOneCharacter: Authenticated user UID:', currentUser.uid);
+      await saveCharacter(character, currentUser.uid);
       if (cachedData.characters) {
         const updatedCharacters = [...cachedData.characters];
         const index = updatedCharacters.findIndex(c => c.id === character.id);
@@ -588,11 +591,12 @@ export function StorageProvider({ children }) {
   const updateCampaign = async (campaign) => {
     if (!currentUser) {
       setError('User not authenticated. Please log in.');
+      console.error('updateCampaign: No authenticated user');
       return false;
     }
-  
     try {
-      // Pass the user's UID instead of the entire currentUser object
+      console.log('updateCampaign: Saving campaign with data:', campaign);
+      console.log('updateCampaign: Authenticated user UID:', currentUser.uid);
       return await saveCampaign(campaign, currentUser.uid);
     } catch (error) {
       console.error('Error saving campaign:', error);
