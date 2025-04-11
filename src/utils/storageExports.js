@@ -1,7 +1,7 @@
-import { db } from '../firebase';
+
 import { collection, getDocs, setDoc, doc, deleteDoc, query, where, getDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
-import { auth, db } from './firebase';
+import { db } from './firebase';
 
 
 const auth = getAuth();
@@ -215,28 +215,15 @@ export const loadCampaign = async (campaignId, userId = null) => {
   }
 };
 
-export const saveCampaign = async (campaign, userId = null) => {
+export const saveCampaign = async (campaign, userId) => {
   try {
-    const user = await ensureAuthenticated();
-    const userIdToUse = userId || user;
-    console.log('saveCampaign: Using userId:', userIdToUse);
-    if (typeof userIdToUse !== 'string') {
-      throw new Error('userId must be a string, received: ' + typeof userIdToUse);
-    }
-    console.log('saveCampaign: Original campaign data:', campaign);
-    console.log(`Saving campaign ${campaign.id} for user ${userIdToUse}`);
-    console.log(`Campaign has ${campaign.sessions?.length || 0} sessions`);
-    const campaignToSave = deepCleanForFirestore({ ...campaign, userId: userIdToUse });
-    console.log('saveCampaign: Cleaned campaign data:', campaignToSave);
-    if (!campaignToSave || !campaignToSave.id) {
-      throw new Error('Invalid campaign data after cleaning');
-    }
-    await setDoc(doc(db, 'campaigns', campaignToSave.id.toString()), campaignToSave);
-    console.log(`Campaign ${campaignToSave.id} saved successfully`);
+    const campaignRef = doc(db, 'campaigns', campaign.id);
+    await setDoc(campaignRef, { ...campaign, userId }, { merge: true });
+    console.log(`Campaign ${campaign.id} saved successfully`);
     return true;
   } catch (error) {
-    console.error('Error saving campaign to Firestore:', { message: error.message, code: error.code, stack: error.stack });
-    throw error;
+    console.error('Error saving campaign to Firestore:', error);
+    throw new Error(`Error saving campaign: ${error.message}`);
   }
 };
 

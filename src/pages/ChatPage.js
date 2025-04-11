@@ -1,7 +1,8 @@
+// src/pages/ChatPage.js
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useStorage } from '../contexts/StorageContext';
-import apiClient from '../utils/apiClient'; 
+import apiClient from '../utils/apiClient';
 
 const API_URL = process.env.NODE_ENV === 'production'
   ? 'https://my-backend-jet-two.vercel.app'
@@ -14,7 +15,8 @@ function ChatPage() {
   const [selectedCharacter, setSelectedCharacter] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingCharacters, setIsLoadingCharacters] = useState(false);
+  const [isGeneratingResponse, setIsGeneratingResponse] = useState(false);
   const [error, setError] = useState(null);
   const messagesEndRef = useRef(null);
 
@@ -27,13 +29,13 @@ function ChatPage() {
       }
 
       try {
-        setIsLoading(true);
+        setIsLoadingCharacters(true);
         const loadedCharacters = await getAllCharacters();
         setCharacters(loadedCharacters || []);
       } catch (err) {
         setError('Failed to load characters: ' + err.message);
       } finally {
-        setIsLoading(false);
+        setIsLoadingCharacters(false);
       }
     };
 
@@ -57,13 +59,13 @@ function ChatPage() {
 
   const handleSendMessage = async () => {
     if (!input.trim() || !selectedCharacter) return;
-  
+
     const userMessage = { sender: 'user', text: input, timestamp: new Date().toISOString() };
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
-    setIsLoading(true);
+    setIsGeneratingResponse(true);
     setError(null);
-  
+
     try {
       const systemPrompt = `You are ${selectedCharacter.name}, a character with the following traits: ${selectedCharacter.traits || 'none'}. Your personality is: ${selectedCharacter.personality || 'neutral'}. Respond as this character would.`;
       const data = await apiClient.post('/chat', { systemPrompt, userMessage: input });
@@ -72,7 +74,7 @@ function ChatPage() {
     } catch (err) {
       setError('Failed to send message: ' + err.message);
     } finally {
-      setIsLoading(false);
+      setIsGeneratingResponse(false);
     }
   };
 
@@ -82,10 +84,6 @@ function ChatPage() {
       handleSendMessage();
     }
   };
-
-  if (isLoading) {
-    return <div>Loading characters...</div>;
-  }
 
   return (
     <div className="chat-page">
@@ -98,63 +96,74 @@ function ChatPage() {
         </div>
       )}
 
-      <div className="chat-container">
-        <div className="character-selection">
-          <h2>Select a Character</h2>
-          {characters.length === 0 ? (
-            <p>
-              No characters found. <Link to="/characters">Create one</Link> to start chatting.
-            </p>
-          ) : (
-            <ul className="character-list">
-              {characters.map((char) => (
-                <li
-                  key={char.id}
-                  className={`character-item ${selectedCharacter?.id === char.id ? 'selected' : ''}`}
-                  onClick={() => handleCharacterSelect(char)}
-                >
-                  {char.name}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="chat-area">
-          {selectedCharacter ? (
-            <>
-              <h2>{selectedCharacter.name}</h2>
-              <div className="messages">
-                {messages.map((msg, index) => (
-                  <div
-                    key={index}
-                    className={`message ${msg.sender === 'user' ? 'user-message' : 'character-message'}`}
+      {isLoadingCharacters ? (
+        <div>Loading characters...</div>
+      ) : (
+        <div className="chat-container">
+          <div className="character-selection">
+            <h2>Select a Character</h2>
+            {characters.length === 0 ? (
+              <p>
+                No characters found. <Link to="/characters">Create one</Link> to start chatting.
+              </p>
+            ) : (
+              <ul className="character-list">
+                {characters.map((char) => (
+                  <li
+                    key={char.id}
+                    className={`character-item ${selectedCharacter?.id === char.id ? 'selected' : ''}`}
+                    onClick={() => handleCharacterSelect(char)}
                   >
-                    <strong>{msg.sender === 'user' ? 'You' : selectedCharacter.name}</strong>{' '}
-                    <span>{new Date(msg.timestamp).toLocaleTimeString()}</span>
-                    <p>{msg.text}</p>
-                  </div>
+                    {char.name}
+                  </li>
                 ))}
-                <div ref={messagesEndRef} />
-              </div>
-              <div className="chat-input">
-                <textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Type your message..."
-                  disabled={isLoading}
-                />
-                <button onClick={handleSendMessage} disabled={isLoading}>
-                  {isLoading ? 'Sending...' : 'Send'}
-                </button>
-              </div>
-            </>
-          ) : (
-            <p>Please select a character to start chatting.</p>
-          )}
+              </ul>
+            )}
+          </div>
+
+          <div className="chat-area">
+            {selectedCharacter ? (
+              <>
+                <h2>{selectedCharacter.name}</h2>
+                <div className="messages">
+                  {messages.map((msg, index) => (
+                    <div
+                      key={index}
+                      className={`message ${msg.sender === 'user' ? 'user-message' : 'character-message'}`}
+                    >
+                      <strong>{msg.sender === 'user' ? 'You' : selectedCharacter.name}</strong>{' '}
+                      <span>{new Date(msg.timestamp).toLocaleTimeString()}</span>
+                      <p>{msg.text}</p>
+                    </div>
+                  ))}
+                  {isGeneratingResponse && (
+                    <div className="message character-message">
+                      <strong>{selectedCharacter.name}</strong>{' '}
+                      <span>{new Date().toLocaleTimeString()}</span>
+                      <p>Generating response...</p>
+                    </div>
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+                <div className="chat-input">
+                  <textarea
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder="Type your message..."
+                    disabled={isGeneratingResponse}
+                  />
+                  <button onClick={handleSendMessage} disabled={isGeneratingResponse}>
+                    {isGeneratingResponse ? 'Sending...' : 'Send'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p>Please select a character to start chatting.</p>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       <Link to="/dashboard">Back to Dashboard</Link>
     </div>

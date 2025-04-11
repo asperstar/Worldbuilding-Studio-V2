@@ -3,7 +3,7 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { auth } from '../firebase';
 import { onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
-import { doc, getDoc, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, addDoc, query, where, getDocs, updateDoc } from 'firebase/firestore'; // Added updateDoc
 import { db } from '../firebase';
 
 import {
@@ -25,33 +25,6 @@ import {
 } from '../utils/storageExports';
 
 const StorageContext = createContext();
-// Add this function to your CampaignSessionPage component
-const testSave = async () => {
-  if (!campaign) return;
-  
-  try {
-    const testCampaign = {
-      ...campaign,
-      testField: "Test save " + Date.now()
-    };
-    
-    console.log("Test saving campaign:", testCampaign.id);
-    const success = await updateCampaign(testCampaign);
-    console.log("Test save result:", success);
-    
-    if (success) {
-      console.log("Test save successful");
-      setCampaign(testCampaign);
-    } else {
-      console.error("Test save failed");
-    }
-  } catch (error) {
-    console.error("Error in test save:", error);
-  }
-};
-
-// Add a button to trigger the test
-<button onClick={testSave}>Test Save</button>
 
 export function StorageProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
@@ -69,25 +42,24 @@ export function StorageProvider({ children }) {
     }
   });
 
- // src/contexts/StorageContext.js
-useEffect(() => {
-  // Auth state listener
-  const unsubscribe = onAuthStateChanged(
-    auth,
-    (user) => {
-      console.log('onAuthStateChanged: User state:', user); // Debug log
-      setCurrentUser(user);
-      setIsLoading(false);
-    },
-    (authError) => {
-      console.error('onAuthStateChanged error:', authError); // Debug log
-      setError(authError.message);
-      setIsLoading(false);
-    }
-  );
+  useEffect(() => {
+    // Auth state listener
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      (user) => {
+        console.log('onAuthStateChanged: User state:', user); // Debug log
+        setCurrentUser(user);
+        setIsLoading(false);
+      },
+      (authError) => {
+        console.error('onAuthStateChanged error:', authError); // Debug log
+        setError(authError.message);
+        setIsLoading(false);
+      }
+    );
 
-  return unsubscribe;
-}, []);
+    return unsubscribe;
+  }, []);
 
   const testFirebaseConnection = async () => {
     try {
@@ -429,6 +401,7 @@ useEffect(() => {
       return false;
     }
   };
+
   const getWorldById = async (worldId) => {
     if (!currentUser) {
       setError('User not authenticated. Please log in.');
@@ -572,7 +545,7 @@ useEffect(() => {
     }
   };
 
-  const getCampaign = async (campaignId) => {
+  const getCampaignById = async (campaignId) => { // Renamed to getCampaignById for consistency
     if (!currentUser) {
       setError('User not authenticated. Please log in.');
       return null;
@@ -600,13 +573,42 @@ useEffect(() => {
     try {
       console.log('updateCampaign: Saving campaign with data:', campaign);
       console.log('updateCampaign: Authenticated user UID:', currentUser.uid);
-      return await saveCampaign(campaign, currentUser.uid);
+      const success = await saveCampaign(campaign, currentUser.uid);
+      return success;
     } catch (error) {
       console.error('Error saving campaign:', error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
         setError('Authentication error. Please log in again.');
       } else {
         setError('Failed to save campaign. Please try again.');
+      }
+      return false;
+    }
+  };
+
+  const updateCampaignSession = async (campaignId, sessionMessages) => {
+    if (!currentUser) {
+      setError('User not authenticated. Please log in.');
+      console.error('updateCampaignSession: No authenticated user');
+      return false;
+    }
+    try {
+      console.log('updateCampaignSession: Updating campaign with ID:', campaignId);
+      console.log('updateCampaignSession: Session messages:', sessionMessages);
+      const campaignRef = doc(db, 'campaigns', campaignId);
+      await updateDoc(campaignRef, {
+        sessionMessages,
+        updated: new Date().toISOString(),
+        userId: currentUser.uid
+      });
+      console.log(`Campaign session ${campaignId} updated successfully`);
+      return true;
+    } catch (error) {
+      console.error('Error updating campaign session:', error);
+      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
+        setError('Authentication error. Please log in again.');
+      } else {
+        setError('Failed to update campaign session. Please try again.');
       }
       return false;
     }
@@ -655,8 +657,9 @@ useEffect(() => {
     updateMapData,
     getTimelineData,
     updateTimelineData,
-    getCampaign,
+    getCampaignById, // Updated name
     updateCampaign,
+    updateCampaignSession, // Added
     getWorldCampaigns
   };
 

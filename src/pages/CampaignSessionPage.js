@@ -9,8 +9,9 @@ const API_URL = process.env.NODE_ENV === 'production'
 
 function CampaignSessionPage() {
   const { campaignId } = useParams();
-  const { currentUser, getCampaignById, updateCampaignSession } = useStorage();
+  const { currentUser, getCampaignById, updateCampaignSession, getCharacters } = useStorage();
   const [campaign, setCampaign] = useState(null);
+  const [characters, setCharacters] = useState([]);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -18,7 +19,7 @@ function CampaignSessionPage() {
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    const fetchCampaign = async () => {
+    const fetchCampaignAndCharacters = async () => {
       if (!currentUser || !currentUser.uid) {
         setError('User not authenticated. Please log in.');
         return;
@@ -33,6 +34,15 @@ function CampaignSessionPage() {
         }
         setCampaign(loadedCampaign);
         setMessages(loadedCampaign.sessionMessages || []);
+
+        // Fetch characters based on participantIds
+        if (loadedCampaign.participantIds && loadedCampaign.participantIds.length > 0) {
+          const campaignCharacters = await getCharacters(null); // Fetch all characters
+          const filteredCharacters = campaignCharacters.filter(char =>
+            loadedCampaign.participantIds.includes(char.id)
+          );
+          setCharacters(filteredCharacters);
+        }
       } catch (err) {
         setError('Failed to load campaign: ' + err.message);
       } finally {
@@ -40,8 +50,8 @@ function CampaignSessionPage() {
       }
     };
 
-    fetchCampaign();
-  }, [currentUser, campaignId, getCampaignById]);
+    fetchCampaignAndCharacters();
+  }, [currentUser, campaignId, getCampaignById, getCharacters]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -49,18 +59,18 @@ function CampaignSessionPage() {
 
   const handleSendMessage = async () => {
     if (!input.trim() || !campaign) return;
-  
+
     const userMessage = { role: 'user', content: input, timestamp: new Date().toISOString() };
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
     setInput('');
     setIsLoading(true);
     setError(null);
-  
+
     try {
-      const character = campaign.characters && campaign.characters.length > 0 ? campaign.characters[0].name : 'Narrator';
+      const characterName = characters.length > 0 ? characters[0].name : 'Narrator';
       const context = campaign.description || 'A generic fantasy world.';
-      const data = await apiClient.post('/api/chat', { messages: updatedMessages, character, context });
+      const data = await apiClient.post('/api/chat', { messages: updatedMessages, character: characterName, context });
       const aiMessage = { role: 'assistant', content: data.response, timestamp: new Date().toISOString() };
       const finalMessages = [...updatedMessages, aiMessage];
       setMessages(finalMessages);
@@ -87,7 +97,7 @@ function CampaignSessionPage() {
     return (
       <div className="error-message">
         <p>{error}</p>
-        <Link to="/campaigns">Back to Campaigns</Link>
+        <Link to={`/worlds/${campaign?.worldId}/campaigns`}>Back to Campaigns</Link>
       </div>
     );
   }
@@ -114,11 +124,18 @@ function CampaignSessionPage() {
               key={index}
               className={`message ${msg.role === 'user' ? 'user-message' : 'ai-message'}`}
             >
-              <strong>{msg.role === 'user' ? 'Player' : campaign.characters[0]?.name || 'Narrator'}</strong>{' '}
+              <strong>{msg.role === 'user' ? 'Player' : (characters.length > 0 ? characters[0].name : 'Narrator')}</strong>{' '}
               <span>{new Date(msg.timestamp).toLocaleTimeString()}</span>
               <p>{msg.content}</p>
             </div>
           ))}
+          {isLoading && (
+            <div className="message ai-message">
+              <strong>{characters.length > 0 ? characters[0].name : 'Narrator'}</strong>{' '}
+              <span>{new Date().toLocaleTimeString()}</span>
+              <p>Generating response...</p>
+            </div>
+          )}
           <div ref={messagesEndRef} />
         </div>
         <div className="chat-input">
@@ -135,7 +152,7 @@ function CampaignSessionPage() {
         </div>
       </div>
 
-      <Link to={`/campaigns/${campaignId}`}>Back to Campaign</Link>
+      <Link to={`/worlds/${campaign.worldId}/campaigns`}>Back to Campaigns</Link>
     </div>
   );
 }
