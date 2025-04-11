@@ -16,6 +16,7 @@ function CampaignSessionPage() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [speakingAs, setSpeakingAs] = useState('PLAYER'); // Default to speaking as Player
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -35,9 +36,8 @@ function CampaignSessionPage() {
         setCampaign(loadedCampaign);
         setMessages(loadedCampaign.sessionMessages || []);
 
-        // Fetch characters based on participantIds
         if (loadedCampaign.participantIds && loadedCampaign.participantIds.length > 0) {
-          const campaignCharacters = await getCharacters(null); // Fetch all characters
+          const campaignCharacters = await getCharacters(null);
           const filteredCharacters = campaignCharacters.filter(char =>
             loadedCampaign.participantIds.includes(char.id)
           );
@@ -60,18 +60,61 @@ function CampaignSessionPage() {
   const handleSendMessage = async () => {
     if (!input.trim() || !campaign) return;
 
-    const userMessage = { role: 'user', content: input, timestamp: new Date().toISOString() };
+    const isGM = campaign.gmType === 'USER' && speakingAs === 'GM';
+    const userMessage = {
+      role: isGM ? 'assistant' : 'user',
+      content: input,
+      timestamp: new Date().toISOString(),
+      speaker: isGM ? 'Game Master' : speakingAs === 'PLAYER' ? 'Player' : characters.find(char => char.id === speakingAs)?.name || 'Unknown',
+    };
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
     setInput('');
     setIsLoading(true);
     setError(null);
 
+    if (isGM) {
+      // If user is acting as GM, no AI response is needed
+      await updateCampaignSession(campaignId, updatedMessages);
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      const characterName = characters.length > 0 ? characters[0].name : 'Narrator';
+      // Determine who the AI should respond as
+      let aiResponder = 'Game Master';
+      let systemPrompt = null;
+
+      // If the GM is AI, it responds as the GM by default
+      if (campaign.gmType === 'AI') {
+        systemPrompt = 'You are a Game Master in a fantasy campaign.';
+      } else {
+        // If the user is speaking as a character, the AI should respond as another character in the session
+        if (speakingAs !== 'PLAYER') {
+          const speakingAsCharacter = characters.find(char => char.id === speakingAs);
+          // Find another character in the session to respond as (not the one the user is speaking as)
+          const otherCharacters = characters.filter(char => char.id !== speakingAs);
+          if (otherCharacters.length > 0) {
+            aiResponder = otherCharacters[0].name; // Respond as the first other character
+          } else {
+            // If no other characters, respond as a generic Narrator
+            aiResponder = 'Narrator';
+          }
+        } else {
+          // If the user is speaking as the Player, the AI responds as the last character they interacted with
+          const lastMessage = messages[messages.length - 1];
+          const lastSpeaker = lastMessage?.speaker;
+          if (lastSpeaker && lastSpeaker !== 'Player' && lastSpeaker !== 'Game Master') {
+            aiResponder = lastSpeaker;
+          } else if (characters.length > 0) {
+            aiResponder = characters[0].name;
+          }
+        }
+      }
+
       const context = campaign.description || 'A generic fantasy world.';
-      const data = await apiClient.post('/api/chat', { messages: updatedMessages, character: characterName, context });
-      const aiMessage = { role: 'assistant', content: data.response, timestamp: new Date().toISOString() };
+      const data = await apiClient.post('/api/chat', { messages: updatedMessages, character: aiResponder, context, systemPrompt });
+      const aiMessage = { role: 'assistant', content: data.response, timestamp: new Date().toISOString(), speaker: aiResponder };
       const finalMessages = [...updatedMessages, aiMessage];
       setMessages(finalMessages);
       await updateCampaignSession(campaignId, finalMessages);
@@ -118,20 +161,37 @@ function CampaignSessionPage() {
       )}
 
       <div className="chat-area">
+        <div className="chat-header">
+          <label>Speaking as: </label>
+          <select value={speakingAs} onChange={(e) => setSpeakingAs(e.target.value)}>
+            <option value="PLAYER">Player</option>
+            {campaign.gmType === 'USER' && <option value="GM">Game Master</option>}
+            {characters.map((char) => (
+              <option key={char.id} value={char.id}>{char.name}</option>
+            ))}
+          </select>
+          <Link to={`/campaigns/${campaign.id}/settings`} className="settings-button">
+            +
+          </Link>
+        </div>
         <div className="messages">
           {messages.map((msg, index) => (
             <div
               key={index}
-              className={`message ${msg.role === 'user' ? 'user-message' : 'ai-message'}`}
+              className={`message ${msg.role === 'user' ? 'user-message' : 'ai-message'} ${
+                msg.speaker === 'Game Master' ? 'gm-message' : ''
+              }`}
             >
-              <strong>{msg.role === 'user' ? 'Player' : (characters.length > 0 ? characters[0].name : 'Narrator')}</strong>{' '}
+              <strong>{msg.speaker || 'Narrator'}</strong>{' '}
               <span>{new Date(msg.timestamp).toLocaleTimeString()}</span>
               <p>{msg.content}</p>
             </div>
           ))}
           {isLoading && (
             <div className="message ai-message">
-              <strong>{characters.length > 0 ? characters[0].name : 'Narrator'}</strong>{' '}
+              <strong>
+                {campaign.gmType === 'AI' ? 'Game Master' : characters.length > 0 ? characters[0].name : 'Narrator'}
+              </strong>{' '}
               <span>{new Date().toLocaleTimeString()}</span>
               <p>Generating response...</p>
             </div>
@@ -147,7 +207,7 @@ function CampaignSessionPage() {
             disabled={isLoading}
           />
           <button onClick={handleSendMessage} disabled={isLoading}>
-            {isLoading ? 'Sending...' : 'Send'}
+            Send
           </button>
         </div>
       </div>
