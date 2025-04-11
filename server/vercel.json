@@ -7,8 +7,43 @@
     ],
     "routes": [
       {
+        "src": "/chat",
+        "methods": ["OPTIONS", "POST"],
+        "dest": "/api/index.js",
+        "headers": {
+          "Access-Control-Allow-Origin": "https://worldbuilding-app-plum.vercel.app",
+          "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type,Accept,Authorization",
+          "Access-Control-Allow-Credentials": "true"
+        }
+      },
+      {
+        "src": "/api/chat",
+        "methods": ["OPTIONS", "POST"],
+        "dest": "/api/index.js",
+        "headers": {
+          "Access-Control-Allow-Origin": "https://worldbuilding-app-plum.vercel.app",
+          "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type,Accept,Authorization",
+          "Access-Control-Allow-Credentials": "true"
+        }
+      },
+      {
+        "src": "/generate-map",
+        "methods": ["OPTIONS", "POST"],
+        "dest": "/api/index.js",
+        "headers": {
+          "Access-Control-Allow-Origin": "https://worldbuilding-app-plum.vercel.app",
+          "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type,Accept,Authorization",
+          "Access-Control-Allow-Credentials": "true"
+        }
+      },
+      {
         "src": "/(.*)",
         "dest": "/api/index.js"
       }
-    ]
+    ],
+    "cleanUrls": false,
+    "trailingSlash": false
   }

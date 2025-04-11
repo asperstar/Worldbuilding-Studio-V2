@@ -24,27 +24,9 @@ module.exports = async (req, res) => {
     return;
   }
 
-  // Enable CORS for all origins temporarily (for debugging)
+  // Enable CORS for the frontend domain
   const corsMiddleware = cors({
-    origin: (origin, callback) => {
-      const allowedOrigins = [
-        'http://localhost:3000',
-        'http://localhost:55596',
-        'https://worldbuilding-bbluwxi-zoe-leonhardt-projects.vercel.app',
-        'http://192.168.0.0:3000',
-        'https://worldbuilding.studio',
-        'https://www.worldbuilding.studio',
-        'https://worldbuilding-app-plum.vercel.app/',
-        /\.vercel\.app$/,
-      ];
-      if (!origin || allowedOrigins.some(allowed =>
-        typeof allowed === 'string' ? allowed === origin : allowed.test(origin)
-      )) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
+    origin: 'https://worldbuilding-app-plum.vercel.app', // Explicitly allow the frontend domain
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
     credentials: true,
@@ -59,6 +41,7 @@ module.exports = async (req, res) => {
 
     // Handle OPTIONS preflight requests
     if (req.method === 'OPTIONS') {
+      console.log('Handling OPTIONS preflight request');
       res.status(200).end();
       return;
     }
@@ -193,7 +176,7 @@ module.exports = async (req, res) => {
             prompt += connections.map(conn => `${conn.source} to ${conn.target}`).join('; ');
           }
         }
-        prompt += '. The map should have a medieval fantasy style with vibrant colors, detailed terrain, and tight labels for each environment.';
+        prompt += '. The map should have a medieval fantasy style with vibrant colors, detailed terrain, and clear labels for each environment.';
 
         const response = await axios.post(
           'https://api.replicate.com/v1/predictions',
