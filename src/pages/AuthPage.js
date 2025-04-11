@@ -18,7 +18,6 @@ function AuthPage() {
   const navigate = useNavigate();
   const auth = getAuth();
   
-  // Check if user is already logged in
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -43,7 +42,6 @@ function AuthPage() {
         userCredential = await createUserWithEmailAndPassword(auth, email, password);
       }
       
-      // Test Firestore connection
       const testResult = await testStorage();
       console.log('Firestore connection test:', testResult);
       
@@ -59,7 +57,6 @@ function AuthPage() {
       console.error("Auth error:", error);
       let errorMessage = "Authentication failed";
       
-      // More user-friendly error messages
       switch(error.code) {
         case 'auth/invalid-email':
           errorMessage = 'Invalid email address format.';
@@ -99,17 +96,19 @@ function AuthPage() {
         
         {error && <div className="error-message">{error}</div>}
         
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} action="/auth" method="POST">
           <div className="form-group">
             <label htmlFor="email">Email</label>
             <input 
               id="email"
               type="email" 
+              name="username" // Added name attribute
               value={email} 
               onChange={(e) => setEmail(e.target.value)} 
               required 
               placeholder="Enter your email"
               disabled={loading}
+              autoComplete="username" // Added for password saving
             />
           </div>
           
@@ -118,12 +117,14 @@ function AuthPage() {
             <input 
               id="password"
               type="password" 
+              name="password" // Added name attribute
               value={password} 
               onChange={(e) => setPassword(e.target.value)} 
               required 
               minLength="6"
               placeholder="Enter your password"
               disabled={loading}
+              autoComplete={isLogin ? "current-password" : "new-password"} // Different for login vs signup
             />
           </div>
           

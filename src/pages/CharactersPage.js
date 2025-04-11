@@ -1,7 +1,15 @@
-/* eslint-disable no-undef*/
-/* eslint-disable no-undef*/
+// src/pages/CharactersPage.js
+import React, { useState, useEffect, useCallback } from 'react';
+import CharacterForm from '../components/characters/CharacterForm'; // Ensure this import is present
+import { saveCharacter, deleteCharacter, testStorage } from '../utils/storageExports'; // Added testStorage
+import { Link } from 'react-router-dom'; // Ensure this import is present
+import { trace } from 'firebase/performance';
+import { perf } from '../firebase';
+import { useStorage } from '../contexts/StorageContext';
+import debounce from 'lodash/debounce';
+
 function CharactersPage() {
-  const { currentUser, getAllCharacters, testStorage } = useStorage(); // Ensure testStorage is imported
+  const { currentUser, getAllCharacters, testStorage } = useStorage();
   const [characters, setCharacters] = useState([]);
   const [editingCharacter, setEditingCharacter] = useState(null);
   const [storageStatus, setStorageStatus] = useState({ tested: false, working: false });
@@ -9,7 +17,7 @@ function CharactersPage() {
   const [filteredCharacters, setFilteredCharacters] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [saveError, setSaveError] = useState(null); // Add saveError state
+  const [saveError, setSaveError] = useState(null); // Added saveError state
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const pageSize = 10;
@@ -98,7 +106,7 @@ function CharactersPage() {
 
   const autoSave = debounce(async (characterData) => {
     if (!currentUser || !characterData.name) return;
-  
+
     try {
       const characterToSave = {
         ...characterData,
@@ -107,14 +115,14 @@ function CharactersPage() {
         created: draftCharacter ? draftCharacter.created : new Date().toISOString(),
         updated: new Date().toISOString(),
       };
-  
+
       if (!draftCharacter) {
-        characterToSave.id = `char_${Date.now()}`; // Generate a new ID
-        await saveCharacter(characterToSave, currentUser.uid); // Pass userId explicitly
+        characterToSave.id = `char_${Date.now()}`;
+        await saveCharacter(characterToSave, currentUser.uid);
         setDraftCharacter(characterToSave);
       } else {
         const updatedCharacter = { ...draftCharacter, ...characterToSave };
-        await saveCharacter(updatedCharacter, currentUser.uid); // Pass userId explicitly
+        await saveCharacter(updatedCharacter, currentUser.uid);
         setDraftCharacter(updatedCharacter);
       }
     } catch (error) {
@@ -136,7 +144,7 @@ function CharactersPage() {
   const handleSaveCharacter = async (newCharacter) => {
     try {
       setIsLoading(true);
-      setSaveError(null); // Clear previous save error
+      setSaveError(null);
       let updatedCharacter;
       if (editingCharacter) {
         updatedCharacter = {
@@ -266,7 +274,7 @@ function CharactersPage() {
             onCancel={cancelEditing}
             isEditing={!!editingCharacter}
             onChange={handleFormChange}
-            isSubmitting={isLoading} // Pass isSubmitting to CharacterForm
+            isSubmitting={isLoading}
           />
         </div>
         <div className="characters-list">
