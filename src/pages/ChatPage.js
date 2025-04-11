@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useStorage } from '../contexts/StorageContext';
 
 const API_URL = process.env.NODE_ENV === 'production'
-  ? 'https://my-backend-jet-two.vercel.app/'
+  ? 'https://my-backend-jet-two.vercel.app'
   : 'http://localhost:3002';
 
 function ChatPage() {
@@ -17,7 +17,6 @@ function ChatPage() {
   const [error, setError] = useState(null);
   const messagesEndRef = useRef(null);
 
-  // Check authentication and load characters
   useEffect(() => {
     const fetchCharacters = async () => {
       if (!currentUser || !currentUser.uid) {
@@ -40,7 +39,6 @@ function ChatPage() {
     fetchCharacters();
   }, [currentUser, getAllCharacters, navigate]);
 
-  // Scroll to the bottom of the chat when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -67,7 +65,7 @@ function ChatPage() {
 
     try {
       const systemPrompt = `You are ${selectedCharacter.name}, a character with the following traits: ${selectedCharacter.traits || 'none'}. Your personality is: ${selectedCharacter.personality || 'neutral'}. Respond as this character would.`;
-      const response = await fetch(`${API_URL}/chat`, {
+      const response = await fetch(`${API_URL}/chat/`, { // Ensure trailing slash
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ systemPrompt, userMessage: input }),

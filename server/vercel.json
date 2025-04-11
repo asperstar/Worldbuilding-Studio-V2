@@ -6,18 +6,19 @@
       }
     ],
     "routes": [
-      {
-        "src": "/chat",
-        "methods": ["OPTIONS"],
-        "headers": {
-          "Access-Control-Allow-Origin": "https://worldbuilding-app-plum.vercel.app",
-          "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type,Accept,Authorization",
-          "Access-Control-Allow-Credentials": "true"
-        },
-        "status": 200,
-        "continue": false
-      },
+      
+        {
+            "src": "/chat/?",
+            "methods": ["OPTIONS"],
+            "headers": {
+              "Access-Control-Allow-Origin": "https://worldbuilding-app-plum.vercel.app",
+              "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+              "Access-Control-Allow-Headers": "Content-Type,Accept,Authorization",
+              "Access-Control-Allow-Credentials": "true"
+            },
+            "status": 200,
+            "continue": false
+          },
       {
         "src": "/chat",
         "methods": ["POST"],
