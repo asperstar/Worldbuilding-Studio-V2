@@ -47,7 +47,7 @@ module.exports = async (req, res) => {
     // Log incoming requests for debugging
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
     console.log('Headers:', req.headers);
-    console.log('Body:', req.body);
+    console.log('Body (raw):', req.body);
 
     // Handle OPTIONS preflight requests
     if (req.method === 'OPTIONS') {
@@ -62,8 +62,11 @@ module.exports = async (req, res) => {
       return;
     }
 
+    // Normalize the URL by removing trailing slash for comparison
+    const normalizedUrl = req.url.replace(/\/$/, '');
+
     // /chat endpoint (for 1x1 character chat)
-    if (req.method === 'POST' && req.url === '/chat') {
+    if (req.method === 'POST' && normalizedUrl === '/chat') {
       try {
         const { systemPrompt, userMessage } = req.body;
 
@@ -108,7 +111,7 @@ module.exports = async (req, res) => {
     }
 
     // /api/chat endpoint (for campaign chat)
-    if (req.method === 'POST' && req.url === '/api/chat') {
+    if (req.method === 'POST' && normalizedUrl === '/api/chat') {
       try {
         const { messages, character, context } = req.body;
 
@@ -167,7 +170,7 @@ module.exports = async (req, res) => {
     }
 
     // /generate-map endpoint
-    if (req.method === 'POST' && req.url === '/generate-map') {
+    if (req.method === 'POST' && normalizedUrl === '/generate-map') {
       try {
         const { environments, connections } = req.body;
 
