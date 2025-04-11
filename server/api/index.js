@@ -9,7 +9,10 @@ const fetch = require('node-fetch'); // For making HTTP requests to Claude API
 
 
 
-
+// api/index.js
+module.exports = (req, res) => {
+  res.status(200).json({ status: 'API running' });
+};
 
 
 // Add this at the top of index.js and update the fetch URLs in CampaignSessionPage.js
