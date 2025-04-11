@@ -321,8 +321,8 @@ export const loadCharacters = async (userId = null, projectId = null) => {
 export const saveCharacter = async (character, userId = null) => {
   try {
     const user = await ensureAuthenticated();
+    console.log('saveCharacter: userId:', userId, 'user:', user);
     const userIdToUse = userId || user;
-    console.log('saveCharacter: Using userId:', userIdToUse);
     if (typeof userIdToUse !== 'string') {
       throw new Error('userId must be a string, received: ' + typeof userIdToUse);
     }

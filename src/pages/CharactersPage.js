@@ -1,16 +1,7 @@
 /* eslint-disable no-undef*/
 /* eslint-disable no-undef*/
-import React, { useState, useEffect, useCallback } from 'react';
-import CharacterForm from '../components/characters/CharacterForm';
-import { saveCharacter, deleteCharacter } from '../utils/storageExports';
-import { Link } from 'react-router-dom';
-import { trace } from 'firebase/performance';
-import { perf } from '../firebase';
-import { useStorage } from '../contexts/StorageContext';
-import debounce from 'lodash/debounce';
-
 function CharactersPage() {
-  const { currentUser, getAllCharacters } = useStorage();
+  const { currentUser, getAllCharacters, testStorage } = useStorage(); // Ensure testStorage is imported
   const [characters, setCharacters] = useState([]);
   const [editingCharacter, setEditingCharacter] = useState(null);
   const [storageStatus, setStorageStatus] = useState({ tested: false, working: false });
@@ -18,6 +9,7 @@ function CharactersPage() {
   const [filteredCharacters, setFilteredCharacters] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [saveError, setSaveError] = useState(null); // Add saveError state
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const pageSize = 10;
@@ -45,7 +37,7 @@ function CharactersPage() {
             setError(`Unable to connect to Firestore: ${test.error}`);
           }
         } else {
-          setError(null); // Clear any previous error
+          setError(null);
         }
       } catch (err) {
         setStorageStatus({ tested: true, working: false });
@@ -53,7 +45,7 @@ function CharactersPage() {
       }
     };
     checkStorage();
-  }, []);
+  }, [testStorage]);
 
   const loadCharacterData = useCallback(async (pageNum) => {
     setIsLoading(true);
@@ -106,7 +98,7 @@ function CharactersPage() {
 
   const autoSave = debounce(async (characterData) => {
     if (!currentUser || !characterData.name) return;
-
+  
     try {
       const characterToSave = {
         ...characterData,
@@ -115,14 +107,14 @@ function CharactersPage() {
         created: draftCharacter ? draftCharacter.created : new Date().toISOString(),
         updated: new Date().toISOString(),
       };
-
+  
       if (!draftCharacter) {
-        characterToSave.id = `char_${Date.now()}`;
-        await saveCharacter(characterToSave, currentUser);
+        characterToSave.id = `char_${Date.now()}`; // Generate a new ID
+        await saveCharacter(characterToSave, currentUser.uid); // Pass userId explicitly
         setDraftCharacter(characterToSave);
       } else {
         const updatedCharacter = { ...draftCharacter, ...characterToSave };
-        await saveCharacter(updatedCharacter, currentUser);
+        await saveCharacter(updatedCharacter, currentUser.uid); // Pass userId explicitly
         setDraftCharacter(updatedCharacter);
       }
     } catch (error) {
@@ -144,7 +136,7 @@ function CharactersPage() {
   const handleSaveCharacter = async (newCharacter) => {
     try {
       setIsLoading(true);
-      setError(null);
+      setSaveError(null); // Clear previous save error
       let updatedCharacter;
       if (editingCharacter) {
         updatedCharacter = {
@@ -156,20 +148,11 @@ function CharactersPage() {
           userId: currentUser.uid,
           isDraft: false,
         };
-      } else if (draftCharacter) {
-        updatedCharacter = {
-          ...draftCharacter,
-          ...newCharacter,
-          imageUrl: newCharacter.imageUrl || '',
-          updated: new Date().toISOString(),
-          userId: currentUser.uid,
-          isDraft: false,
-        };
       } else {
         updatedCharacter = {
           ...newCharacter,
-          imageUrl: newCharacter.imageUrl || '',
           id: `char_${Date.now()}`,
+          imageUrl: newCharacter.imageUrl || '',
           created: new Date().toISOString(),
           updated: new Date().toISOString(),
           userId: currentUser.uid,
@@ -177,7 +160,7 @@ function CharactersPage() {
         };
       }
 
-      await saveCharacter(updatedCharacter, currentUser);
+      await saveCharacter(updatedCharacter, currentUser.uid);
       if (editingCharacter) {
         setCharacters(prevChars =>
           prevChars.map(char => (char.id === editingCharacter.id ? updatedCharacter : char))
@@ -197,7 +180,7 @@ function CharactersPage() {
       });
     } catch (error) {
       console.error("Error saving character:", error);
-      setError(`Failed to save character: ${error.message}`);
+      setSaveError(`Failed to save character: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -264,10 +247,14 @@ function CharactersPage() {
   return (
     <div className="characters-page">
       <h1>Characters</h1>
-      {error && <div className="error-message">{error}</div>}
-      {!storageStatus.working && storageStatus.tested && (
-        <div className="warning-message">
-          Warning: Unable to connect to Firestore. Your characters won't be saved.
+      {storageStatus.tested && !storageStatus.working && error && (
+        <div className="error-message" style={{ backgroundColor: 'red', color: 'white', padding: '10px' }}>
+          {error}
+        </div>
+      )}
+      {saveError && (
+        <div className="save-error-message" style={{ backgroundColor: 'orange', color: 'white', padding: '10px' }}>
+          {saveError}
         </div>
       )}
       <div className="page-content">
@@ -279,6 +266,7 @@ function CharactersPage() {
             onCancel={cancelEditing}
             isEditing={!!editingCharacter}
             onChange={handleFormChange}
+            isSubmitting={isLoading} // Pass isSubmitting to CharacterForm
           />
         </div>
         <div className="characters-list">
