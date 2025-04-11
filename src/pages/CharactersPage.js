@@ -37,11 +37,19 @@ function CharactersPage() {
         const test = await testStorage();
         setStorageStatus({ tested: true, working: test.success });
         if (!test.success) {
-          setError('Unable to connect to Firestore: ' + test.error);
+          if (test.error.includes('not authenticated')) {
+            setError('User not authenticated. Please log in to save characters.');
+          } else if (test.errorCode === 'unavailable') {
+            setError('Network error: Unable to connect to Firestore. Please check your internet connection.');
+          } else {
+            setError(`Unable to connect to Firestore: ${test.error}`);
+          }
+        } else {
+          setError(null); // Clear any previous error
         }
       } catch (err) {
         setStorageStatus({ tested: true, working: false });
-        setError('Failed to connect to Firestore: ' + err.message);
+        setError(`Failed to connect to Firestore: ${err.message}`);
       }
     };
     checkStorage();

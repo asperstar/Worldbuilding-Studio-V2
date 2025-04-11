@@ -7,8 +7,9 @@ const auth = getAuth();
 const ensureAuthenticated = async (retries = 3) => {
   for (let i = 0; i < retries; i++) {
     const user = auth.currentUser;
+    console.log('ensureAuthenticated: auth.currentUser:', user);
     if (user) {
-      return user.uid;
+      return user.uid; // Ensure this is a string
     }
     if (i < retries - 1) {
       console.log(`Auth not ready, retry ${i+1}/${retries}...`);
@@ -320,13 +321,22 @@ export const loadCharacters = async (userId = null, projectId = null) => {
 export const saveCharacter = async (character, userId = null) => {
   try {
     const user = await ensureAuthenticated();
-    const userIdToUse = userId || user; // user is the UID from ensureAuthenticated
-    console.log('saveCharacter: Original character data:', character);
+    const userIdToUse = userId || user;
     console.log('saveCharacter: Using userId:', userIdToUse);
-    // Ensure userIdToUse is a string, not an object
     if (typeof userIdToUse !== 'string') {
       throw new Error('userId must be a string, received: ' + typeof userIdToUse);
     }
+    console.log('saveCharacter: Original character data:', character);
+
+    // Check if the document already exists
+    const charRef = doc(db, 'characters', character.id.toString());
+    const charDoc = await getDoc(charRef);
+    if (charDoc.exists()) {
+      console.log('saveCharacter: Document already exists with data:', charDoc.data());
+    } else {
+      console.log('saveCharacter: Document does not exist, performing create operation');
+    }
+
     const characterToSave = deepCleanForFirestore({ ...character, userId: userIdToUse });
     console.log('saveCharacter: Cleaned character data:', characterToSave);
     if (!characterToSave || !characterToSave.id) {
