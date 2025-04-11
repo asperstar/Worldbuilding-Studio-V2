@@ -9,6 +9,76 @@ const fetch = require('node-fetch'); // For making HTTP requests to Claude API
 
 
 
+// Vercel serverless functions don't need express for simple APIs
+module.exports = async (req, res) => {
+  // Enable CORS for all origins temporarily (for debugging)
+  const corsMiddleware = cors({
+    origin: '*', // Allow all origins for now; tighten this later
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  });
+
+  // Apply CORS middleware
+  corsMiddleware(req, res, async () => {
+    // Log incoming requests for debugging
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    console.log('Headers:', req.headers);
+    console.log('Body:', req.body);
+
+    // Handle OPTIONS preflight requests
+    if (req.method === 'OPTIONS') {
+      res.status(200).end();
+      return;
+    }
+
+    // Only handle POST requests to /chat
+    if (req.method !== 'POST' || req.url !== '/chat') {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    try {
+      const { systemPrompt, userMessage } = req.body;
+      if (!systemPrompt || !userMessage) {
+        res.status(400).json({ error: 'Missing systemPrompt or userMessage' });
+        return;
+      }
+
+      // Claude API integration (replace with your actual API key and endpoint)
+      const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY || 'your-claude-api-key-here';
+      const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages'; // Example endpoint
+
+      const claudeResponse = await fetch(CLAUDE_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': CLAUDE_API_KEY,
+        },
+        body: JSON.stringify({
+          model: 'claude-3-opus-20240229', // Example model
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage },
+          ],
+          max_tokens: 1000,
+        }),
+      });
+
+      if (!claudeResponse.ok) {
+        throw new Error(`Claude API error: ${claudeResponse.status}`);
+      }
+
+      const claudeData = await claudeResponse.json();
+      const response = claudeData.content[0].text; // Adjust based on Claude API response structure
+
+      res.status(200).json({ response });
+    } catch (error) {
+      console.error('Error in /chat endpoint:', { message: error.message, stack: error.stack });
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+};
 
 
 // Add this at the top of index.js and update the fetch URLs in CampaignSessionPage.js
