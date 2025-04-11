@@ -26,7 +26,17 @@ module.exports = async (req, res) => {
 
   // Enable CORS for the frontend domain
   const corsMiddleware = cors({
-    origin: 'https://worldbuilding-app-plum.vercel.app', // Explicitly allow the frontend domain
+    origin: (origin, callback) => {
+      console.log('CORS origin check - Origin:', origin);
+      const allowedOrigins = ['https://worldbuilding-app-plum.vercel.app'];
+      if (!origin || allowedOrigins.includes(origin)) {
+        console.log('CORS origin allowed:', origin);
+        callback(null, true);
+      } else {
+        console.error('CORS origin rejected:', origin);
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
     credentials: true,
@@ -41,7 +51,7 @@ module.exports = async (req, res) => {
 
     // Handle OPTIONS preflight requests
     if (req.method === 'OPTIONS') {
-      console.log('Handling OPTIONS preflight request');
+      console.log('Handling OPTIONS preflight request for:', req.url);
       res.status(200).end();
       return;
     }
