@@ -1,8 +1,8 @@
 // src/pages/CharactersPage.js
 import React, { useState, useEffect, useCallback } from 'react';
-import CharacterForm from '../components/characters/CharacterForm'; // Ensure this import is present
-import { saveCharacter, deleteCharacter, testStorage } from '../utils/storageExports'; // Added testStorage
-import { Link } from 'react-router-dom'; // Ensure this import is present
+import CharacterForm from '../components/characters/CharacterForm';
+import { saveCharacter, deleteCharacter, testStorage } from '../utils/storageExports';
+import { Link } from 'react-router-dom';
 import { trace } from 'firebase/performance';
 import { perf } from '../firebase';
 import { useStorage } from '../contexts/StorageContext';
@@ -17,7 +17,7 @@ function CharactersPage() {
   const [filteredCharacters, setFilteredCharacters] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [saveError, setSaveError] = useState(null); // Added saveError state
+  const [saveError, setSaveError] = useState(null);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const pageSize = 10;
@@ -106,23 +106,23 @@ function CharactersPage() {
 
   const autoSave = debounce(async (characterData) => {
     if (!currentUser || !characterData.name) return;
-
+  
     try {
       const characterToSave = {
         ...characterData,
-        userId: currentUser.uid,
+        userId: currentUser.uid, // Use currentUser.uid (string)
         isDraft: true,
         created: draftCharacter ? draftCharacter.created : new Date().toISOString(),
         updated: new Date().toISOString(),
       };
-
+  
       if (!draftCharacter) {
         characterToSave.id = `char_${Date.now()}`;
-        await saveCharacter(characterToSave, currentUser.uid);
+        await saveCharacter(characterToSave, currentUser.uid); // Pass currentUser.uid
         setDraftCharacter(characterToSave);
       } else {
         const updatedCharacter = { ...draftCharacter, ...characterToSave };
-        await saveCharacter(updatedCharacter, currentUser.uid);
+        await saveCharacter(updatedCharacter, currentUser.uid); // Pass currentUser.uid
         setDraftCharacter(updatedCharacter);
       }
     } catch (error) {
@@ -153,7 +153,7 @@ function CharactersPage() {
           imageUrl: newCharacter.imageUrl || editingCharacter.imageUrl || '',
           created: editingCharacter.created,
           updated: new Date().toISOString(),
-          userId: currentUser.uid,
+          userId: currentUser.uid, // Use currentUser.uid (string)
           isDraft: false,
         };
       } else {
@@ -163,12 +163,12 @@ function CharactersPage() {
           imageUrl: newCharacter.imageUrl || '',
           created: new Date().toISOString(),
           updated: new Date().toISOString(),
-          userId: currentUser.uid,
+          userId: currentUser.uid, // Use currentUser.uid (string)
           isDraft: false,
         };
       }
-
-      await saveCharacter(updatedCharacter, currentUser.uid);
+  
+      await saveCharacter(updatedCharacter, currentUser.uid); // Pass currentUser.uid
       if (editingCharacter) {
         setCharacters(prevChars =>
           prevChars.map(char => (char.id === editingCharacter.id ? updatedCharacter : char))
