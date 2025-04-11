@@ -1,22 +1,17 @@
 import { db } from '../firebase';
 import { collection, getDocs, setDoc, doc, deleteDoc, query, where, getDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import { auth, db } from './firebase';
+
 
 const auth = getAuth();
 
-const ensureAuthenticated = async (retries = 3) => {
-  for (let i = 0; i < retries; i++) {
-    const user = auth.currentUser;
-    console.log('ensureAuthenticated: auth.currentUser:', user);
-    if (user) {
-      return user.uid; // Ensure this is a string
-    }
-    if (i < retries - 1) {
-      console.log(`Auth not ready, retry ${i+1}/${retries}...`);
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
+const ensureAuthenticated = () => {
+  console.log('ensureAuthenticated: auth.currentUser:', auth.currentUser);
+  if (!auth.currentUser) {
+    throw new Error('User not authenticated. Please log in.');
   }
-  throw new Error('User not authenticated after retries');
+  return auth.currentUser.uid;
 };
 
 // Utility function to deep clean an object for Firestore
@@ -318,36 +313,28 @@ export const loadCharacters = async (userId = null, projectId = null) => {
   }
 };
 
-export const saveCharacter = async (character, userId = null) => {
+export const saveCharacter = async (character, userId) => {
   try {
-    const user = await ensureAuthenticated();
-    console.log('saveCharacter: userId:', userId, 'user:', user);
-    const userIdToUse = userId || user;
-    if (typeof userIdToUse !== 'string') {
-      throw new Error('userId must be a string, received: ' + typeof userIdToUse);
+    const authenticatedUserId = ensureAuthenticated();
+    if (authenticatedUserId !== userId) {
+      throw new Error('Authenticated user does not match the provided userId.');
     }
+
+    console.log('saveCharacter: userId:', userId);
     console.log('saveCharacter: Original character data:', character);
 
-    // Check if the document already exists
-    const charRef = doc(db, 'characters', character.id.toString());
-    const charDoc = await getDoc(charRef);
-    if (charDoc.exists()) {
-      console.log('saveCharacter: Document already exists with data:', charDoc.data());
-    } else {
-      console.log('saveCharacter: Document does not exist, performing create operation');
-    }
+    const characterRef = doc(db, 'characters', character.id);
+    const cleanedCharacter = { ...character };
 
-    const characterToSave = deepCleanForFirestore({ ...character, userId: userIdToUse });
-    console.log('saveCharacter: Cleaned character data:', characterToSave);
-    if (!characterToSave || !characterToSave.id) {
-      throw new Error('Invalid character data after cleaning');
-    }
-    await setDoc(doc(db, 'characters', characterToSave.id.toString()), characterToSave);
-    console.log(`Character ${characterToSave.id} saved successfully`);
+    console.log('saveCharacter: Document does not exist, performing create operation');
+    console.log('saveCharacter: Cleaned character data:', cleanedCharacter);
+
+    await setDoc(characterRef, cleanedCharacter, { merge: true });
+    console.log(`Character ${character.id} saved successfully`);
     return true;
   } catch (error) {
-    console.error('Error saving character to Firestore:', { message: error.message, code: error.code, stack: error.stack });
-    throw error;
+    console.error('Error saving character to Firestore:', error);
+    throw new Error(`Error saving character: ${error.message}`);
   }
 };
 

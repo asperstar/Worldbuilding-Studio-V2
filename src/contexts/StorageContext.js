@@ -69,22 +69,25 @@ export function StorageProvider({ children }) {
     }
   });
 
-  useEffect(() => {
-    // Auth state listener
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      (user) => {
-        setCurrentUser(user);
-        setIsLoading(false); // Fix: Use setIsLoading instead of setLoading
-      },
-      (authError) => {
-        setError(authError.message);
-        setIsLoading(false); // Fix: Use setIsLoading instead of setLoading
-      }
-    );
+ // src/contexts/StorageContext.js
+useEffect(() => {
+  // Auth state listener
+  const unsubscribe = onAuthStateChanged(
+    auth,
+    (user) => {
+      console.log('onAuthStateChanged: User state:', user); // Debug log
+      setCurrentUser(user);
+      setIsLoading(false);
+    },
+    (authError) => {
+      console.error('onAuthStateChanged error:', authError); // Debug log
+      setError(authError.message);
+      setIsLoading(false);
+    }
+  );
 
-    return unsubscribe;
-  }, []);
+  return unsubscribe;
+}, []);
 
   const testFirebaseConnection = async () => {
     try {

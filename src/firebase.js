@@ -5,7 +5,9 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signOut, 
-  onAuthStateChanged 
+  onAuthStateChanged,
+  setPersistence, // Add this import
+  browserLocalPersistence // Add this import
 } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -29,7 +31,6 @@ import {
 } from 'firebase/storage';
 import { getPerformance, trace } from 'firebase/performance';
 
-// Firebase configuration
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
   authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
@@ -40,19 +41,25 @@ const firebaseConfig = {
   measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 const perf = getPerformance(app);
 
-// Authentication helper functions
+// Set persistence to LOCAL
+setPersistence(auth, browserLocalPersistence)
+  .then(() => {
+    console.log('Auth persistence set to LOCAL');
+  })
+  .catch((error) => {
+    console.error('Error setting auth persistence:', error);
+  });
+
 const signIn = (email, password) => signInWithEmailAndPassword(auth, email, password);
 const signUp = (email, password) => createUserWithEmailAndPassword(auth, email, password);
 const logOut = () => signOut(auth);
 
-// Export everything needed
 export {
   app,
   auth,

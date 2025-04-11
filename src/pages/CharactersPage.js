@@ -7,8 +7,10 @@ import { trace } from 'firebase/performance';
 import { perf } from '../firebase';
 import { useStorage } from '../contexts/StorageContext';
 import debounce from 'lodash/debounce';
+import { useNavigate } from 'react-router-dom';
 
 function CharactersPage() {
+  const navigate = useNavigate();
   const { currentUser, getAllCharacters, testStorage } = useStorage();
   const [characters, setCharacters] = useState([]);
   const [editingCharacter, setEditingCharacter] = useState(null);
@@ -110,7 +112,7 @@ function CharactersPage() {
     try {
       const characterToSave = {
         ...characterData,
-        userId: currentUser.uid, // Use currentUser.uid (string)
+        userId: currentUser.uid,
         isDraft: true,
         created: draftCharacter ? draftCharacter.created : new Date().toISOString(),
         updated: new Date().toISOString(),
@@ -118,16 +120,21 @@ function CharactersPage() {
   
       if (!draftCharacter) {
         characterToSave.id = `char_${Date.now()}`;
-        await saveCharacter(characterToSave, currentUser.uid); // Pass currentUser.uid
+        await saveCharacter(characterToSave, currentUser.uid);
         setDraftCharacter(characterToSave);
       } else {
         const updatedCharacter = { ...draftCharacter, ...characterToSave };
-        await saveCharacter(updatedCharacter, currentUser.uid); // Pass currentUser.uid
+        await saveCharacter(updatedCharacter, currentUser.uid);
         setDraftCharacter(updatedCharacter);
       }
     } catch (error) {
       console.error('Error auto-saving character:', error);
-      setError('Failed to auto-save character.');
+      if (error.message.includes('User not authenticated')) {
+        setError('Session expired. Please log in again.');
+        navigate('/login');
+      } else {
+        setError('Failed to auto-save character.');
+      }
     }
   }, 1000);
 
@@ -153,7 +160,7 @@ function CharactersPage() {
           imageUrl: newCharacter.imageUrl || editingCharacter.imageUrl || '',
           created: editingCharacter.created,
           updated: new Date().toISOString(),
-          userId: currentUser.uid, // Use currentUser.uid (string)
+          userId: currentUser.uid,
           isDraft: false,
         };
       } else {
@@ -163,12 +170,12 @@ function CharactersPage() {
           imageUrl: newCharacter.imageUrl || '',
           created: new Date().toISOString(),
           updated: new Date().toISOString(),
-          userId: currentUser.uid, // Use currentUser.uid (string)
+          userId: currentUser.uid,
           isDraft: false,
         };
       }
   
-      await saveCharacter(updatedCharacter, currentUser.uid); // Pass currentUser.uid
+      await saveCharacter(updatedCharacter, currentUser.uid);
       if (editingCharacter) {
         setCharacters(prevChars =>
           prevChars.map(char => (char.id === editingCharacter.id ? updatedCharacter : char))
@@ -188,7 +195,12 @@ function CharactersPage() {
       });
     } catch (error) {
       console.error("Error saving character:", error);
-      setSaveError(`Failed to save character: ${error.message}`);
+      if (error.message.includes('User not authenticated')) {
+        setError('Session expired. Please log in again.');
+        navigate('/login'); // Redirect to login page
+      } else {
+        setSaveError(`Failed to save character: ${error.message}`);
+      }
     } finally {
       setIsLoading(false);
     }

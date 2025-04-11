@@ -256,7 +256,7 @@ function MapPage() {
     
     setLoading(true);
     setError(null);
-
+  
     const mapData = {
       environments: nodes
         .filter(node => node.data.type === 'environment')
@@ -270,17 +270,18 @@ function MapPage() {
         target: nodes.find(node => node.id === edge.target)?.data.label
       }))
     };
-
+  
     try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:3002'; // Fallback for development
       const response = await axios.post(
-        'http://localhost:3002/generate-map',
+        `${apiUrl}/generate-map`,
         mapData
       );
-
+  
       const { imageUrl } = response.data;
       setGeneratedImage(imageUrl);
       setShowModal(true);
-
+  
       const worldRef = doc(db, 'worlds', worldId);
       await updateDoc(worldRef, {
         imageUrl: imageUrl,
@@ -300,7 +301,6 @@ function MapPage() {
       setLoading(false);
     }
   };
-
   const renderSidebarContent = () => {
     return (
       <div className="sidebar-content">
