@@ -19,39 +19,60 @@ const ensureAuthenticated = async (retries = 3) => {
 };
 
 // Utility function to deep clean an object for Firestore
-const deepCleanForFirestore = (obj) => {
-  if (obj === null || obj === undefined || typeof obj !== 'object') {
-    console.warn('deepCleanForFirestore received invalid input:', obj);
+// storageExports.js
+const deepCleanForFirestore = (obj, visited = new WeakSet()) => {
+  // Handle null or undefined
+  if (obj === null || obj === undefined) {
     return null;
   }
 
+  // Handle non-objects (primitives)
+  if (typeof obj !== 'object') {
+    return obj;
+  }
+
+  // Check for circular references
+  if (visited.has(obj)) {
+    console.warn('Circular reference detected in object, skipping:', obj);
+    return null; // Or handle differently based on your needs
+  }
+
+  // Add the current object to visited
+  visited.add(obj);
+
+  // Handle arrays
   if (Array.isArray(obj)) {
     return obj
-      .map(item => deepCleanForFirestore(item))
+      .map(item => deepCleanForFirestore(item, visited))
       .filter(item => item !== null && item !== undefined);
   }
 
+  // Handle objects
   const cleaned = {};
   for (const key of Object.keys(obj)) {
     const value = obj[key];
 
+    // Skip userImpl objects
     if (value && typeof value === 'object' && value.constructor && value.constructor.name === 'userImpl') {
       console.log(`Found userImpl object in field '${key}':`, value);
       continue;
     }
 
+    // Skip 'user' field
     if (key === 'user') {
       console.log(`Removing 'user' field with value:`, value);
       continue;
     }
 
+    // Skip undefined values
     if (value === undefined) {
       console.log(`Removing undefined field '${key}'`);
       continue;
     }
 
+    // Recursively clean nested objects
     if (typeof value === 'object') {
-      const cleanedValue = deepCleanForFirestore(value);
+      const cleanedValue = deepCleanForFirestore(value, visited);
       if (cleanedValue !== null && cleanedValue !== undefined) {
         cleaned[key] = cleanedValue;
       }
@@ -60,7 +81,8 @@ const deepCleanForFirestore = (obj) => {
     }
   }
 
-  return Object.keys(cleaned).length > 0 ? cleaned : null;
+  // Return the cleaned object (even if empty)
+  return cleaned;
 };
 
 // World functions
@@ -201,13 +223,15 @@ export const saveCampaign = async (campaign, userId = null) => {
   try {
     const user = await ensureAuthenticated();
     const userIdToUse = userId || user;
+    console.log('saveCampaign: Original campaign data:', campaign);
     console.log(`Saving campaign ${campaign.id} for user ${userIdToUse}`);
     console.log(`Campaign has ${campaign.sessions?.length || 0} sessions`);
     const campaignToSave = deepCleanForFirestore({ ...campaign, userId: userIdToUse });
-    if (!campaignToSave) {
-      throw new Error('Failed to clean campaign data');
+    console.log('saveCampaign: Cleaned campaign data:', campaignToSave);
+    if (!campaignToSave || !campaignToSave.id) {
+      throw new Error('Invalid campaign data after cleaning');
     }
-    await setDoc(doc(db, 'campaigns', campaign.id.toString()), campaignToSave);
+    await setDoc(doc(db, 'campaigns', campaignToSave.id.toString()), campaignToSave);
     console.log(`Campaign saved successfully`);
     return true;
   } catch (error) {
@@ -287,11 +311,13 @@ export const saveCharacter = async (character, userId = null) => {
   try {
     const user = await ensureAuthenticated();
     const userIdToUse = userId || user;
+    console.log('saveCharacter: Original character data:', character);
     const characterToSave = deepCleanForFirestore({ ...character, userId: userIdToUse });
-    if (!characterToSave) {
-      throw new Error('Failed to clean character data');
+    console.log('saveCharacter: Cleaned character data:', characterToSave);
+    if (!characterToSave || !characterToSave.id) {
+      throw new Error('Invalid character data after cleaning');
     }
-    await setDoc(doc(db, 'characters', character.id.toString()), characterToSave);
+    await setDoc(doc(db, 'characters', characterToSave.id.toString()), characterToSave);
     return true;
   } catch (error) {
     console.error('Error saving character to Firestore:', { message: error.message, code: error.code, stack: error.stack });
