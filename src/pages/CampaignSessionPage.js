@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useStorage } from '../contexts/StorageContext';
 import apiClient from '../utils/apiClient';
-import '../styles/CampaignSessionPage.css'; // Add this line
+import '../styles/CampaignSessionPage.css';
 
 const API_URL = process.env.NODE_ENV === 'production'
   ? 'https://my-backend-jet-two.vercel.app'
@@ -15,9 +15,10 @@ function CampaignSessionPage() {
   const [characters, setCharacters] = useState([]);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // For initial campaign loading
+  const [isSendingMessage, setIsSendingMessage] = useState(false); // For message sending
   const [error, setError] = useState(null);
-  const [speakingAs, setSpeakingAs] = useState('PLAYER'); // Default to speaking as Player
+  const [speakingAs, setSpeakingAs] = useState('PLAYER');
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -71,38 +72,31 @@ function CampaignSessionPage() {
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
     setInput('');
-    setIsLoading(true);
+    setIsSendingMessage(true); // Use the new state for message sending
     setError(null);
 
     if (isGM) {
-      // If user is acting as GM, no AI response is needed
       await updateCampaignSession(campaignId, updatedMessages);
-      setIsLoading(false);
+      setIsSendingMessage(false);
       return;
     }
 
     try {
-      // Determine who the AI should respond as
       let aiResponder = 'Game Master';
       let systemPrompt = null;
 
-      // If the GM is AI, it responds as the GM by default
       if (campaign.gmType === 'AI') {
         systemPrompt = 'You are a Game Master in a fantasy campaign.';
       } else {
-        // If the user is speaking as a character, the AI should respond as another character in the session
         if (speakingAs !== 'PLAYER') {
           const speakingAsCharacter = characters.find(char => char.id === speakingAs);
-          // Find another character in the session to respond as (not the one the user is speaking as)
           const otherCharacters = characters.filter(char => char.id !== speakingAs);
           if (otherCharacters.length > 0) {
-            aiResponder = otherCharacters[0].name; // Respond as the first other character
+            aiResponder = otherCharacters[0].name;
           } else {
-            // If no other characters, respond as a generic Narrator
             aiResponder = 'Narrator';
           }
         } else {
-          // If the user is speaking as the Player, the AI responds as the last character they interacted with
           const lastMessage = messages[messages.length - 1];
           const lastSpeaker = lastMessage?.speaker;
           if (lastSpeaker && lastSpeaker !== 'Player' && lastSpeaker !== 'Game Master') {
@@ -122,7 +116,7 @@ function CampaignSessionPage() {
     } catch (err) {
       setError('Failed to send message: ' + err.message);
     } finally {
-      setIsLoading(false);
+      setIsSendingMessage(false);
     }
   };
 
@@ -188,7 +182,7 @@ function CampaignSessionPage() {
               <p>{msg.content}</p>
             </div>
           ))}
-          {isLoading && (
+          {isSendingMessage && (
             <div className="message ai-message">
               <strong>
                 {campaign.gmType === 'AI' ? 'Game Master' : characters.length > 0 ? characters[0].name : 'Narrator'}
@@ -205,9 +199,9 @@ function CampaignSessionPage() {
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Type your message..."
-            disabled={isLoading}
+            disabled={isSendingMessage}
           />
-          <button onClick={handleSendMessage} disabled={isLoading}>
+          <button onClick={handleSendMessage} disabled={isSendingMessage}>
             Send
           </button>
         </div>

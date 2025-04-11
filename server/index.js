@@ -16,25 +16,20 @@ if (!process.env.REPLICATE_API_KEY) {
 
 // Vercel serverless function
 module.exports = async (req, res) => {
-  // Enable CORS for all origins temporarily (for debugging)
+  // Enable CORS for specific origins
   const corsMiddleware = cors({
     origin: (origin, callback) => {
       const allowedOrigins = [
-        'http://localhost:3000',
-        'http://localhost:55596',
-        'https://worldbuilding-bbluwxi-zoe-leonhardt-projects.vercel.app',
-        'http://192.168.0.0:3000',
-        'https://worldbuilding.studio',
-        'https://www.worldbuilding.studio',
-        'https://worldbuilding-app-plum.vercel.app/',
-        /\.vercel\.app$/,
+        'http://localhost:3000', // For local development
+        'https://worldbuilding-app-plum.vercel.app', // Main frontend URL
+        /\.vercel\.app$/, // Allow all Vercel subdomains (useful for preview deployments)
       ];
       if (!origin || allowedOrigins.some(allowed =>
         typeof allowed === 'string' ? allowed === origin : allowed.test(origin)
       )) {
         callback(null, true);
       } else {
-        callback(new Error('Not allowed by CORS'));
+        callback(new Error(`CORS policy: Origin ${origin} not allowed`));
       }
     },
     methods: ['GET', 'POST', 'OPTIONS'],

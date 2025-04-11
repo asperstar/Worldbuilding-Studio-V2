@@ -21,6 +21,7 @@ import CharacterMemoriesPage from './pages/CharacterMemoriesPage';
 import WorldsPage from './pages/WorldsPage';
 import CampaignsPage from './pages/CampaignsPage';
 import CampaignSessionPage from './pages/CampaignSessionPage';
+import CampaignSettingsPage from './pages/CampaignSettingsPage'; // Ensure this import is present
 import CampaignsIndexPage from './pages/CampaignsIndexPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import AuthPage from './pages/AuthPage';
@@ -30,7 +31,7 @@ import DebugPage from './pages/DebugPage';
 import DecorativeElements from './components/DecorativeElements';
 import AzgaarMapIframe from './components/maps/AzgaarMapIframe';
 import LoginPage from 'pages/LoginPage';
-import WorldSelectionPage from './pages/WorldSelectionPage'; // Add this import
+import WorldSelectionPage from './pages/WorldSelectionPage';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -109,14 +110,15 @@ function App() {
                     <Route path="/characters" element={<ProtectedRoute><CharactersPage /></ProtectedRoute>} />
                     <Route path="/characters/:characterId/memories" element={<ProtectedRoute><CharacterMemoriesPage /></ProtectedRoute>} />
                     <Route path="/environments" element={<ProtectedRoute><EnvironmentsPage /></ProtectedRoute>} />
-                    <Route path="/map" element={<ProtectedRoute><WorldSelectionPage /></ProtectedRoute>} /> {/* Updated to WorldSelectionPage */}
-                    <Route path="/map/:worldId" element={<ProtectedRoute><MapPage /></ProtectedRoute>} /> {/* Add ProtectedRoute */}
+                    <Route path="/map" element={<ProtectedRoute><WorldSelectionPage /></ProtectedRoute>} />
+                    <Route path="/map/:worldId" element={<ProtectedRoute><MapPage /></ProtectedRoute>} />
                     <Route path="/timeline" element={<ProtectedRoute><TimelinePage /></ProtectedRoute>} />
                     <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
                     <Route path="/import-export" element={<ProtectedRoute><ImportExportPage /></ProtectedRoute>} />
                     <Route path="/worlds" element={<ProtectedRoute><WorldsPage /></ProtectedRoute>} />
                     <Route path="/worlds/:worldId/campaigns" element={<ProtectedRoute><CampaignsPage /></ProtectedRoute>} />
                     <Route path="/campaigns/:campaignId/session" element={<ProtectedRoute><CampaignSessionPage /></ProtectedRoute>} />
+                    <Route path="/campaigns/:campaignId/settings" element={<ProtectedRoute><CampaignSettingsPage /></ProtectedRoute>} /> {/* Added ProtectedRoute */}
                     <Route path="/campaigns" element={<ProtectedRoute><CampaignsIndexPage /></ProtectedRoute>} />
                     <Route path="/worlds/:worldId/map/fantasy" element={<ProtectedRoute><AzgaarMapIframe /></ProtectedRoute>} />
                     <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
