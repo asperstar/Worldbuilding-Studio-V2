@@ -223,6 +223,10 @@ export const saveCampaign = async (campaign, userId = null) => {
   try {
     const user = await ensureAuthenticated();
     const userIdToUse = userId || user;
+    console.log('saveCampaign: Using userId:', userIdToUse);
+    if (typeof userIdToUse !== 'string') {
+      throw new Error('userId must be a string, received: ' + typeof userIdToUse);
+    }
     console.log('saveCampaign: Original campaign data:', campaign);
     console.log(`Saving campaign ${campaign.id} for user ${userIdToUse}`);
     console.log(`Campaign has ${campaign.sessions?.length || 0} sessions`);
@@ -232,7 +236,7 @@ export const saveCampaign = async (campaign, userId = null) => {
       throw new Error('Invalid campaign data after cleaning');
     }
     await setDoc(doc(db, 'campaigns', campaignToSave.id.toString()), campaignToSave);
-    console.log(`Campaign saved successfully`);
+    console.log(`Campaign ${campaignToSave.id} saved successfully`);
     return true;
   } catch (error) {
     console.error('Error saving campaign to Firestore:', { message: error.message, code: error.code, stack: error.stack });
@@ -244,13 +248,19 @@ export const updateCampaign = async (campaign, userId = null) => {
   try {
     const user = await ensureAuthenticated();
     const userIdToUse = userId || user;
+    console.log('updateCampaign: Using userId:', userIdToUse);
+    if (typeof userIdToUse !== 'string') {
+      throw new Error('userId must be a string, received: ' + typeof userIdToUse);
+    }
     console.log(`Updating campaign ${campaign.id} for user ${userIdToUse}`);
+    console.log('updateCampaign: Original campaign data:', campaign);
     const campaignToSave = deepCleanForFirestore({ ...campaign, userId: userIdToUse });
-    if (!campaignToSave) {
+    console.log('updateCampaign: Cleaned campaign data:', campaignToSave);
+    if (!campaignToSave || !campaignToSave.id) {
       throw new Error('Failed to clean campaign data for update');
     }
     await setDoc(doc(db, 'campaigns', campaign.id.toString()), campaignToSave);
-    console.log(`Campaign updated successfully`);
+    console.log(`Campaign ${campaign.id} updated successfully`);
     return true;
   } catch (error) {
     console.error('Error updating campaign in Firestore:', { message: error.message, code: error.code, stack: error.stack });
@@ -310,14 +320,20 @@ export const loadCharacters = async (userId = null, projectId = null) => {
 export const saveCharacter = async (character, userId = null) => {
   try {
     const user = await ensureAuthenticated();
-    const userIdToUse = userId || user;
+    const userIdToUse = userId || user; // user is the UID from ensureAuthenticated
     console.log('saveCharacter: Original character data:', character);
+    console.log('saveCharacter: Using userId:', userIdToUse);
+    // Ensure userIdToUse is a string, not an object
+    if (typeof userIdToUse !== 'string') {
+      throw new Error('userId must be a string, received: ' + typeof userIdToUse);
+    }
     const characterToSave = deepCleanForFirestore({ ...character, userId: userIdToUse });
     console.log('saveCharacter: Cleaned character data:', characterToSave);
     if (!characterToSave || !characterToSave.id) {
       throw new Error('Invalid character data after cleaning');
     }
     await setDoc(doc(db, 'characters', characterToSave.id.toString()), characterToSave);
+    console.log(`Character ${characterToSave.id} saved successfully`);
     return true;
   } catch (error) {
     console.error('Error saving character to Firestore:', { message: error.message, code: error.code, stack: error.stack });
@@ -329,13 +345,20 @@ export const saveCharacters = async (characters, userId = null) => {
   try {
     const user = await ensureAuthenticated();
     const userIdToUse = userId || user;
+    console.log('saveCharacters: Using userId:', userIdToUse);
+    if (typeof userIdToUse !== 'string') {
+      throw new Error('userId must be a string, received: ' + typeof userIdToUse);
+    }
     for (const character of characters) {
+      console.log('saveCharacters: Original character data:', character);
       const characterToSave = deepCleanForFirestore({ ...character, userId: userIdToUse });
-      if (!characterToSave) {
+      console.log('saveCharacters: Cleaned character data:', characterToSave);
+      if (!characterToSave || !characterToSave.id) {
         console.error('Failed to clean character data:', character);
         continue;
       }
-      await setDoc(doc(db, 'characters', character.id.toString()), characterToSave);
+      await setDoc(doc(db, 'characters', characterToSave.id.toString()), characterToSave);
+      console.log(`Character ${characterToSave.id} saved successfully`);
     }
     return true;
   } catch (error) {
@@ -390,13 +413,20 @@ export const saveEnvironments = async (environments, userId = null) => {
   try {
     const user = await ensureAuthenticated();
     const userIdToUse = userId || user;
+    console.log('saveEnvironments: Using userId:', userIdToUse);
+    if (typeof userIdToUse !== 'string') {
+      throw new Error('userId must be a string, received: ' + typeof userIdToUse);
+    }
     for (const environment of environments) {
+      console.log('saveEnvironments: Original environment data:', environment);
       const environmentToSave = deepCleanForFirestore({ ...environment, userId: userIdToUse });
-      if (!environmentToSave) {
+      console.log('saveEnvironments: Cleaned environment data:', environmentToSave);
+      if (!environmentToSave || !environmentToSave.id) {
         console.error('Failed to clean environment data:', environment);
         continue;
       }
-      await setDoc(doc(db, 'environments', environment.id.toString()), environmentToSave);
+      await setDoc(doc(db, 'environments', environmentToSave.id.toString()), environmentToSave);
+      console.log(`Environment ${environmentToSave.id} saved successfully`);
     }
     return true;
   } catch (error) {
@@ -448,15 +478,22 @@ export const saveMapData = async (userId, mapData) => {
   try {
     const user = await ensureAuthenticated();
     const userIdToUse = userId || user;
+    console.log('saveMapData: Using userId:', userIdToUse);
+    if (typeof userIdToUse !== 'string') {
+      throw new Error('userId must be a string, received: ' + typeof userIdToUse);
+    }
+    console.log('saveMapData: Original map data:', mapData);
     const mapToSave = deepCleanForFirestore({
       ...mapData,
       userId: userIdToUse,
       imageUrl: mapData.imageUrl || ''
     });
+    console.log('saveMapData: Cleaned map data:', mapToSave);
     if (!mapToSave) {
       throw new Error('Failed to clean map data');
     }
     await setDoc(doc(db, 'maps', userIdToUse), mapToSave);
+    console.log(`Map data for user ${userIdToUse} saved successfully`);
     return true;
   } catch (error) {
     console.error('Error saving map data to Firestore:', { message: error.message, code: error.code, stack: error.stack });
@@ -489,11 +526,18 @@ export const saveTimelineData = async (userId, timelineData) => {
   try {
     const user = await ensureAuthenticated();
     const userIdToUse = userId || user;
+    console.log('saveTimelineData: Using userId:', userIdToUse);
+    if (typeof userIdToUse !== 'string') {
+      throw new Error('userId must be a string, received: ' + typeof userIdToUse);
+    }
+    console.log('saveTimelineData: Original timeline data:', timelineData);
     const timelineToSave = deepCleanForFirestore({ ...timelineData, userId: userIdToUse });
+    console.log('saveTimelineData: Cleaned timeline data:', timelineToSave);
     if (!timelineToSave) {
       throw new Error('Failed to clean timeline data');
     }
     await setDoc(doc(db, 'timelines', userIdToUse), timelineToSave);
+    console.log(`Timeline data for user ${userIdToUse} saved successfully`);
     return true;
   } catch (error) {
     console.error('Error saving timeline data to Firestore:', { message: error.message, code: error.code, stack: error.stack });
@@ -548,27 +592,38 @@ export const importAllData = async (data, userId = null) => {
   try {
     const user = await ensureAuthenticated();
     const userIdToUse = userId || user;
+    console.log('importAllData: Using userId:', userIdToUse);
+    if (typeof userIdToUse !== 'string') {
+      throw new Error('userId must be a string, received: ' + typeof userIdToUse);
+    }
     const results = [];
     if (data.characters && Array.isArray(data.characters)) {
+      console.log('importAllData: Importing characters:', data.characters);
       results.push(await saveCharacters(data.characters, userIdToUse));
     }
     if (data.environments && Array.isArray(data.environments)) {
+      console.log('importAllData: Importing environments:', data.environments);
       results.push(await saveEnvironments(data.environments, userIdToUse));
     }
     if (data.worlds && Array.isArray(data.worlds)) {
+      console.log('importAllData: Importing worlds:', data.worlds);
       results.push(await saveWorlds(data.worlds, userIdToUse));
     }
     if (data.campaigns && Array.isArray(data.campaigns)) {
+      console.log('importAllData: Importing campaigns:', data.campaigns);
       for (const campaign of data.campaigns) {
         results.push(await saveCampaign(campaign, userIdToUse));
       }
     }
     if (data.mapData) {
+      console.log('importAllData: Importing map data:', data.mapData);
       results.push(await saveMapData(userIdToUse, data.mapData));
     }
     if (data.timelineData) {
+      console.log('importAllData: Importing timeline data:', data.timelineData);
       results.push(await saveTimelineData(userIdToUse, data.timelineData));
     }
+    console.log('importAllData: Import results:', results);
     return results.every(result => result === true);
   } catch (error) {
     console.error('Error importing data:', { message: error.message, code: error.code, stack: error.stack });
