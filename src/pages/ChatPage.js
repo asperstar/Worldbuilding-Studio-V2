@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useStorage } from '../contexts/StorageContext';
+import apiClient from '../utils/apiClient'; 
 
 const API_URL = process.env.NODE_ENV === 'production'
   ? 'https://my-backend-jet-two.vercel.app'
@@ -56,30 +57,16 @@ function ChatPage() {
 
   const handleSendMessage = async () => {
     if (!input.trim() || !selectedCharacter) return;
-
+  
     const userMessage = { sender: 'user', text: input, timestamp: new Date().toISOString() };
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
     setError(null);
-
+  
     try {
       const systemPrompt = `You are ${selectedCharacter.name}, a character with the following traits: ${selectedCharacter.traits || 'none'}. Your personality is: ${selectedCharacter.personality || 'neutral'}. Respond as this character would.`;
-      const response = await fetch(`${API_URL}/chat/`, { // Ensure trailing slash
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ systemPrompt, userMessage: input }),
-      });
-
-      if (!response.ok) {
-        if (response.status === 0) {
-          throw new Error('Network error: Unable to reach the server. Please check your internet connection.');
-        }
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to get response from server');
-      }
-
-      const data = await response.json();
+      const data = await apiClient.post('/chat', { systemPrompt, userMessage: input });
       const characterMessage = { sender: 'character', text: data.response, timestamp: new Date().toISOString() };
       setMessages((prev) => [...prev, characterMessage]);
     } catch (err) {

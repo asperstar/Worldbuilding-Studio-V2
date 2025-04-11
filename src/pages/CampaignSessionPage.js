@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useStorage } from '../contexts/StorageContext';
+import apiClient from '../utils/apiClient';
 
 const API_URL = process.env.NODE_ENV === 'production'
   ? 'https://my-backend-jet-two.vercel.app'
@@ -48,37 +49,21 @@ function CampaignSessionPage() {
 
   const handleSendMessage = async () => {
     if (!input.trim() || !campaign) return;
-
+  
     const userMessage = { role: 'user', content: input, timestamp: new Date().toISOString() };
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
     setInput('');
     setIsLoading(true);
     setError(null);
-
+  
     try {
       const character = campaign.characters && campaign.characters.length > 0 ? campaign.characters[0].name : 'Narrator';
       const context = campaign.description || 'A generic fantasy world.';
-      const response = await fetch(`${API_URL}/api/chat/`, { // Add trailing slash
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: updatedMessages, character, context }),
-      });
-
-      if (!response.ok) {
-        if (response.status === 0) {
-          throw new Error('Network error: Unable to reach the server. Please check your internet connection.');
-        }
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to get response from server');
-      }
-
-      const data = await response.json();
+      const data = await apiClient.post('/api/chat', { messages: updatedMessages, character, context });
       const aiMessage = { role: 'assistant', content: data.response, timestamp: new Date().toISOString() };
       const finalMessages = [...updatedMessages, aiMessage];
       setMessages(finalMessages);
-
-      // Save the session messages to Firestore
       await updateCampaignSession(campaignId, finalMessages);
     } catch (err) {
       setError('Failed to send message: ' + err.message);
