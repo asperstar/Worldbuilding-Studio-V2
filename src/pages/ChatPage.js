@@ -1,12 +1,7 @@
-// src/pages/ChatPage.js
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useStorage } from '../contexts/StorageContext';
-import apiClient from '../utils/apiClient';
-
-const API_URL = process.env.NODE_ENV === 'production'
-  ? 'https://my-backend-jet-two.vercel.app'
-  : 'http://localhost:3002';
+import { getCharacterById, enhanceCharacterAPI } from '../utils/character/updatedContextProcessor';
 
 function ChatPage() {
   const { currentUser, getAllCharacters } = useStorage();
@@ -46,15 +41,22 @@ function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleCharacterSelect = (character) => {
-    setSelectedCharacter(character);
-    setMessages([
-      {
-        sender: 'character',
-        text: `Hello! I'm ${character.name}. It's nice to meet you.`,
-        timestamp: new Date().toISOString(),
-      },
-    ]);
+  const handleCharacterSelect = async (characterId) => {
+    try {
+      console.log(`Selecting character with ID: ${characterId}`);
+      const character = await getCharacterById(characterId);
+      if (character) {
+        console.log(`Character selected: ${character.name}, ID: ${character.id}`);
+        setSelectedCharacter(character);
+        setMessages([]); // Reset messages when selecting a new character
+      } else {
+        console.error(`Character not found: ${characterId}`);
+        setError('Character not found. Please select another character.');
+      }
+    } catch (error) {
+      console.error('Error selecting character:', error);
+      setError('Failed to select character.');
+    }
   };
 
   const handleSendMessage = async () => {
@@ -67,9 +69,20 @@ function ChatPage() {
     setError(null);
 
     try {
-      const systemPrompt = `You are ${selectedCharacter.name}, a character with the following traits: ${selectedCharacter.traits || 'none'}. Your personality is: ${selectedCharacter.personality || 'neutral'}. Respond as this character would.`;
-      const data = await apiClient.post('/chat', { systemPrompt, userMessage: input });
-      const characterMessage = { sender: 'character', text: data.response, timestamp: new Date().toISOString() };
+      const result = await enhanceCharacterAPI(
+        selectedCharacter.id,
+        input,
+        messages,
+        { temperature: 0.7 }
+      );
+
+      const characterMessage = {
+        sender: 'character',
+        text: result.response,
+        timestamp: new Date().toISOString(),
+        memoryId: null, // Placeholder for memory ID (for future memory-wiping feature)
+      };
+
       setMessages((prev) => [...prev, characterMessage]);
     } catch (err) {
       setError('Failed to send message: ' + err.message);
@@ -83,6 +96,12 @@ function ChatPage() {
       e.preventDefault();
       handleSendMessage();
     }
+  };
+
+  const handleEditResponse = (index, newText) => {
+    const updatedMessages = [...messages];
+    updatedMessages[index] = { ...updatedMessages[index], text: newText, edited: true };
+    setMessages(updatedMessages);
   };
 
   return (
@@ -112,7 +131,7 @@ function ChatPage() {
                   <li
                     key={char.id}
                     className={`character-item ${selectedCharacter?.id === char.id ? 'selected' : ''}`}
-                    onClick={() => handleCharacterSelect(char)}
+                    onClick={() => handleCharacterSelect(char.id)}
                   >
                     {char.name}
                   </li>
@@ -133,7 +152,17 @@ function ChatPage() {
                     >
                       <strong>{msg.sender === 'user' ? 'You' : selectedCharacter.name}</strong>{' '}
                       <span>{new Date(msg.timestamp).toLocaleTimeString()}</span>
-                      <p>{msg.text}</p>
+                      <p
+                        contentEditable={msg.sender === 'character'}
+                        onBlur={(e) => handleEditResponse(index, e.target.textContent)}
+                        suppressContentEditableWarning={true}
+                      >
+                        {msg.text}
+                      </p>
+                      {msg.edited && <small> (Edited)</small>}
+                      {msg.sender === 'character' && (
+                        <button disabled={true}>Forget This Response (Coming Soon)</button>
+                      )}
                     </div>
                   ))}
                   {isGeneratingResponse && (

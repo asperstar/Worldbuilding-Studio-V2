@@ -1,5 +1,6 @@
 // src/utils/character/contextProcessor.js
 /* eslint-disable no-unused-vars */ 
+import { getFirestore, doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'; 
 import { auth } from '../firebase';
 import { 
   getCharacterMemories, 
@@ -9,15 +10,13 @@ import {
 import { 
   loadCharacters,
   loadWorldById,
-  loadWorldTimeline,
+  loadTimelineData,
   loadMapData,
   loadWorlds,
-  loadTimelineData,
   loadEnvironments,
   loadCampaign
 } from '../storage';
 import { 
-  getCharacterRelationships,
   getWorldById,
   getEnvironmentById,
   getCampaignById
@@ -172,15 +171,17 @@ export const buildCharacterContext = async (character, conversationContext = '',
       
           // Add relevant timeline events from this world
           try {
-            const timeline = await loadWorldTimeline(character.worldId);
+            const timeline = await loadTimelineData();
+            // Filter timeline events for this world if needed
             if (timeline && timeline.events && timeline.events.length > 0) {
-              contextData.worldTimeline = timeline.events
+              const worldEvents = timeline.events.filter(event => event.worldId === character.worldId);
+              
+              contextData.worldTimeline = worldEvents
                 .sort((a, b) => a.date.localeCompare(b.date))
                 .map(event => ({
                   title: event.title,
                   date: event.date,
                   description: event.description,
-                  // Only include if character is involved
                   relevantToCharacter: event.characterIds?.includes(character.id) || false
                 }));
             }
@@ -392,6 +393,7 @@ function rotateContextWindow(context, maxItems = 3) {
 }
 
 // Modify the enhanceCharacterAPI function
+// Update the enhanceCharacterAPI function in contextProcessor.js
 export async function enhanceCharacterAPI(characterId, message, previousMessages = [], options = {}) {
   try {
     const user = auth.currentUser;
@@ -399,74 +401,60 @@ export async function enhanceCharacterAPI(characterId, message, previousMessages
       throw new Error('User not authenticated');
     }
 
-    // Load only essential character data
+    // Load character data
     const character = await getCharacterById(characterId);
     if (!character) {
       throw new Error(`Character with ID ${characterId} not found`);
     }
 
-    // Create minimal context
-    const minimalContext = {
-      character: {
-        name: character.name,
-        description: (character.description || '').substring(0, 50),
-        personality: (character.personality || '').substring(0, 50)
-      },
-      lastMessage: previousMessages.length > 0 ? previousMessages[previousMessages.length - 1].text : ''
-    };
-
-    // Try Ollama first with minimal context
-    try {
-      const prompt = `You are ${minimalContext.character.name}. 
-Description: ${minimalContext.character.description}
-Personality: ${minimalContext.character.personality}
-${minimalContext.lastMessage ? `Last message: ${minimalContext.lastMessage}` : ''}
-
-User's message: "${message}"
-
-Please respond in character.`;
-
-      const ollamaResponse = await fetch('http://localhost:11434/api/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: "mistral",
-          prompt: prompt,
-          stream: false,
-          options: {
-            temperature: options.temperature || 0.7,
-            top_p: options.topP || 0.9,
-            num_predict: options.maxTokens || 500
-          }
-        })
-      });
-
-      if (ollamaResponse.ok) {
-        const data = await ollamaResponse.json();
-        return {
-          response: data.response,
-          context: minimalContext,
-          source: 'ollama'
-        };
+    // Load world data if character belongs to a world
+    let worldContext = null;
+    if (character.worldId) {
+      try {
+        const world = await loadWorldById(character.worldId);
+        if (world) {
+          worldContext = {
+            name: world.name,
+            description: world.description || '',
+            rules: world.rules || '',
+            lore: world.lore || ''
+          };
+        }
+      } catch (worldError) {
+        console.error('Error loading world data:', worldError);
       }
-    } catch (ollamaError) {
-      console.log('Ollama not available, falling back to Claude:', ollamaError);
     }
 
-    // Fall back to Claude with minimal context
-    const token = await user.getIdToken();
-    const response = await fetch('/api/claude-api-dev', {
+    // Build character context with world information included
+    const context = await buildCharacterContext(
+      character, 
+      message, 
+      { 
+        mode: options.mode || 'chat',
+        includeWorldInfo: true,
+        worldContext: worldContext
+      }
+    );
+    
+    // Format conversation history properly
+    const formattedHistory = formatConversationHistory(previousMessages);
+
+    // Call the API using your existing apiClient
+    const API_URL = process.env.NODE_ENV === 'production'
+      ? 'https://my-backend-jet-two.vercel.app'
+      : 'http://localhost:3002';
+      
+    const response = await fetch(`${API_URL}/api/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({
         characterId,
         message,
-        context: minimalContext,
+        context: context,
+        conversationHistory: formattedHistory,
+        worldContext: worldContext, // Include world context in the API call
         options: {
           maxTokens: options.maxTokens || 500,
           temperature: options.temperature || 0.7,
@@ -481,8 +469,9 @@ Please respond in character.`;
 
     const data = await response.json();
     return {
-      response: data.response,
-      context: minimalContext,
+      response: data.response || data.text,
+      context: context,
+      worldContext: worldContext,
       source: 'claude'
     };
   } catch (error) {
@@ -490,24 +479,60 @@ Please respond in character.`;
     throw error;
   }
 }
-
 export async function getCharacterById(characterId) {
-  try {
-    const characters = await loadCharacters();
-    const character = characters.find(char => char.id === characterId);
-    
-    if (!character) {
-      console.error(`Character with ID ${characterId} not found`);
-      throw new Error(`Character with ID ${characterId} not found`);
-    }
-    
-    return character;
-  } catch (error) {
-    console.error('Error in getCharacterById:', error);
-    throw error;
+  console.log(`Fetching character with ID: ${characterId}`);
+  
+  // Special case for GM
+  if (characterId === 'GM') {
+    console.log('Creating special GM character');
+    return {
+      id: 'GM',
+      name: 'Game Master',
+      personality: 'An engaging and fair Game Master who narrates the campaign, describes scenes, controls NPCs, and guides the story.',
+      background: 'As the Game Master, you manage the game world and create an immersive experience for the players.',
+      appearance: 'The omniscient narrator and guide of the campaign.',
+      traits: 'Fair, creative, descriptive, adaptable',
+      isGameMaster: true
+    };
   }
-}
+  
+  const db = getFirestore();
+  const idVariations = [
+    characterId,
+    `char_${characterId}`,
+    characterId.startsWith('char_') ? characterId.replace('char_', '') : `char_${characterId}`,
+    characterId.substring(5),
+  ];
+  
+  let character = null;
+  for (const idToTry of idVariations) {
+    console.log(`Trying ID variation: ${idToTry}`);
+    const docRef = doc(db, 'characters', idToTry);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      character = { id: docSnap.id, ...docSnap.data() };
+      console.log(`Found character using ID format: ${idToTry}`);
+      return character;
+    }
+  }
+  
+  // Fallback: Match by name
+  console.log(`Falling back to matching by name for ID: ${characterId}`);
+  const q = query(collection(db, 'characters'), where('name', '==', characterId));
+  const querySnapshot = await getDocs(q);
+  querySnapshot.forEach((doc) => {
+    if (doc.exists()) {
+      character = { id: doc.id, ...doc.data() };
+      console.log(`Found character by name: ${characterId}, ID: ${doc.id}`);
+    }
+  });
+  
+  if (character) return character;
 
+  // Log if character is not found
+  console.log(`Character not found with any ID variation. Tried: ${idVariations.join(', ')}`);
+  return null;
+}
 function formatConversationHistory(messages) {
   if (!Array.isArray(messages)) {
     console.warn('formatConversationHistory received non-array messages:', messages);

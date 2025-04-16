@@ -8,3 +8,13 @@
 ### Modifications:
 - Integrated into React application
 - Modified for compatibility with our worldbuilding tool
+
+ Head Developer: 
+- Asperstar (Zoe Leonhard)
+
+ Graphic Deigner(s):
+- Jupiter 
+
+ Programmer(s):
+
+ Backers: 

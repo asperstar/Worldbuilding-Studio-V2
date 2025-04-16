@@ -377,6 +377,16 @@ const loadData = async () => {
                           checked={selectedCharacters.includes(character.id)}
                           onChange={() => toggleCharacterSelection(character.id)}
                         />
+                        {selectedCharacter && (
+  <div className="character-chat-header">
+    <h2>{selectedCharacter.name}</h2>
+    {selectedCharacter.worldId && (
+      <div className="world-badge">
+        From {worlds.find(w => w.id === selectedCharacter.worldId)?.name || 'Unknown World'}
+      </div>
+    )}
+  </div>
+)}
                         <div className="character-info">
                           {character.imageUrl ? (
                             <img

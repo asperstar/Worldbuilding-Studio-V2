@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useStorage } from '../contexts/StorageContext';
-
+import aiConfig from '../utils/aiConfig';
 
 function CampaignSettingsPage() {
   const { campaignId } = useParams();
@@ -11,6 +11,7 @@ function CampaignSettingsPage() {
   const [characters, setCharacters] = useState([]);
   const [gmType, setGmType] = useState('USER');
   const [gmPrompt, setGmPrompt] = useState('');
+  const [aiProvider, setAiProvider] = useState(aiConfig.currentProvider.key);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -32,6 +33,7 @@ function CampaignSettingsPage() {
         setCampaign(loadedCampaign);
         setGmType(loadedCampaign.gmType || 'USER');
         setGmPrompt(loadedCampaign.gmPrompt || '');
+        setAiProvider(loadedCampaign.aiProvider || aiConfig.currentProvider.key);
 
         const allCharacters = await getCharacters(null);
         setCharacters(allCharacters || []);
@@ -60,6 +62,7 @@ function CampaignSettingsPage() {
         ...campaign,
         gmType,
         gmPrompt,
+        aiProvider
       };
       const success = await updateCampaign(updatedCampaign);
       if (success) {
@@ -105,7 +108,7 @@ function CampaignSettingsPage() {
       <div className="gm-controls">
         <h2>GM Controls</h2>
         <div>
-          <label>Who’s the GM?</label>
+          <label>Who's the GM?</label>
           <select value={gmType} onChange={(e) => setGmType(e.target.value)}>
             <option value="USER">User</option>
             <option value="AI">AI</option>
@@ -121,6 +124,32 @@ function CampaignSettingsPage() {
             />
           </div>
         )}
+        
+        {/* New AI Provider Setting */}
+        <div className="ai-provider-section">
+          <h2>AI Provider Settings</h2>
+          <div>
+            <label>AI Provider:</label>
+            <select value={aiProvider} onChange={(e) => setAiProvider(e.target.value)}>
+              {Object.values(aiConfig.AI_PROVIDERS).map(provider => (
+                <option key={provider} value={provider}>
+                  {aiConfig.PROVIDER_CONFIGS[provider].name}
+                </option>
+              ))}
+            </select>
+          </div>
+          
+          {aiProvider === aiConfig.AI_PROVIDERS.TOGETHER && !aiConfig.isApiKeyConfigured() && (
+            <div className="api-key-warning">
+              <p>⚠️ Together AI API key not configured. Please add your API key to the .env file.</p>
+            </div>
+          )}
+          
+          <div className="provider-info">
+            <p>{aiConfig.PROVIDER_CONFIGS[aiProvider].description}</p>
+            <p><strong>Default Model:</strong> {aiConfig.PROVIDER_CONFIGS[aiProvider].defaultModel}</p>
+          </div>
+        </div>
       </div>
 
       <button onClick={handleSave}>Save Settings</button>

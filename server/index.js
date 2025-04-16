@@ -1,6 +1,7 @@
 require('dotenv').config();
+const express = require('express');
 const cors = require('cors');
-const fetch = require('node-fetch'); // For making HTTP requests to Claude API
+const fetch = require('node-fetch');
 const axios = require('axios');
 
 // Check for required environment variables
@@ -14,15 +15,15 @@ if (!process.env.REPLICATE_API_KEY) {
   process.exit(1);
 }
 
-// Vercel serverless function
-module.exports = async (req, res) => {
-  // Enable CORS for specific origins
+// Define the handler function (same as the serverless function)
+const handler = async (req, res) => {
+  // CORS configuration
   const corsMiddleware = cors({
     origin: (origin, callback) => {
       const allowedOrigins = [
         'http://localhost:3000', // For local development
-        'https://worldbuilding-app-plum.vercel.app', // Main frontend URL
-        /\.vercel\.app$/, // Allow all Vercel subdomains (useful for preview deployments)
+        'https://worldbuilding-app-plum.vercel.app',
+        /\.vercel\.app$/,
       ];
       if (!origin || allowedOrigins.some(allowed =>
         typeof allowed === 'string' ? allowed === origin : allowed.test(origin)
@@ -39,33 +40,27 @@ module.exports = async (req, res) => {
 
   // Apply CORS middleware
   corsMiddleware(req, res, async () => {
-    // Log incoming requests for debugging
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
     console.log('Headers:', req.headers);
     console.log('Body:', req.body);
 
-    // Handle OPTIONS preflight requests
     if (req.method === 'OPTIONS') {
       res.status(200).end();
       return;
     }
 
-    // Test endpoint (equivalent to app.get('/'))
     if (req.method === 'GET' && req.url === '/') {
       res.status(200).send('Worldbuilding Backend is running!');
       return;
     }
 
-    // /chat endpoint (for 1x1 character chat)
     if (req.method === 'POST' && req.url === '/chat') {
       try {
         const { systemPrompt, userMessage } = req.body;
-
         if (!systemPrompt || !userMessage) {
           res.status(400).json({ error: 'Missing systemPrompt or userMessage' });
           return;
         }
-
         const response = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
@@ -75,18 +70,14 @@ module.exports = async (req, res) => {
           },
           body: JSON.stringify({
             model: 'claude-3-opus-20240229',
-            messages: [
-              { role: 'user', content: `${systemPrompt}\n\n${userMessage}` },
-            ],
+            messages: [{ role: 'user', content: `${systemPrompt}\n\n${userMessage}` }],
             max_tokens: 500,
             temperature: 0.7,
           }),
         });
-
         if (!response.ok) {
           throw new Error(`Claude API error: ${response.status}`);
         }
-
         const claudeData = await response.json();
         const reply = claudeData.content[0].text;
         res.status(200).json({ response: reply });
@@ -97,30 +88,23 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // /api/chat endpoint (for campaign chat)
     if (req.method === 'POST' && req.url === '/api/chat') {
       try {
         const { messages, character, context } = req.body;
-
         if (!messages || !Array.isArray(messages) || !character) {
           res.status(400).json({ error: 'Messages and character are required' });
           return;
         }
-
         let prompt = `You are ${character}, a character in a roleplay game. Respond in character, using the following context and conversation history to inform your response.\n\n`;
-
         if (context) {
           prompt += `Campaign Context:\n${context}\n\n`;
         }
-
         prompt += `Conversation History:\n`;
         messages.forEach(msg => {
           const sender = msg.role === 'user' ? 'Player' : character;
           prompt += `${sender}: ${msg.content}\n`;
         });
-
         prompt += `\n${character}: `;
-
         const response = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
@@ -130,18 +114,14 @@ module.exports = async (req, res) => {
           },
           body: JSON.stringify({
             model: 'claude-3-opus-20240229',
-            messages: [
-              { role: 'user', content: prompt },
-            ],
+            messages: [{ role: 'user', content: prompt }],
             max_tokens: 500,
             temperature: 0.7,
           }),
         });
-
         if (!response.ok) {
           throw new Error(`Claude API error: ${response.status}`);
         }
-
         const claudeData = await response.json();
         const reply = claudeData.content[0].text;
         res.status(200).json({ response: reply });
@@ -152,16 +132,13 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // /generate-map endpoint
     if (req.method === 'POST' && req.url === '/generate-map') {
       try {
         const { environments, connections } = req.body;
-
         if (!environments || !Array.isArray(environments)) {
           res.status(400).json({ error: 'Missing or invalid environments' });
           return;
         }
-
         let prompt = `A detailed fantasy map featuring the following environments: `;
         if (environments.length === 0) {
           prompt += 'a generic fantasy world with forests, mountains, and rivers';
@@ -173,7 +150,6 @@ module.exports = async (req, res) => {
           }
         }
         prompt += '. The map should have a medieval fantasy style with vibrant colors, detailed terrain, and clear labels for each environment.';
-
         const response = await axios.post(
           'https://api.replicate.com/v1/predictions',
           {
@@ -195,10 +171,8 @@ module.exports = async (req, res) => {
             },
           }
         );
-
         const prediction = response.data;
         let result;
-
         while (true) {
           const statusResponse = await axios.get(
             `https://api.replicate.com/v1/predictions/${prediction.id}`,
@@ -209,7 +183,6 @@ module.exports = async (req, res) => {
             }
           );
           result = statusResponse.data;
-
           if (result.status === 'succeeded') {
             const imageUrl = result.output[0];
             res.status(200).json({ imageUrl });
@@ -226,7 +199,20 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // If no routes match
     res.status(404).json({ error: 'Not found' });
   });
 };
+
+// Export for Vercel serverless function
+module.exports = handler;
+
+// Run as a standalone server in development
+if (process.env.NODE_ENV !== 'production') {
+  const app = express();
+  app.use(express.json()); // Parse JSON bodies
+  app.use((req, res) => handler(req, res)); // Use the handler for all requests
+  const PORT = process.env.PORT || 3002;
+  app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+  });
+}

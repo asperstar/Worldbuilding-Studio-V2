@@ -1,5 +1,6 @@
 // src/utils/memory/memoryManager.js
-import { storeMemory, retrieveMemories, deleteMemory, getAllMemories } from './vectorDb';
+import { db } from '../firebase';
+import { collection, addDoc, getDocs, query, where, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 
 // Types of memories we'll store
 export const MEMORY_TYPES = {
@@ -20,22 +21,86 @@ export async function addMemory(characterId, content, type, importance = 5) {
     timestamp: new Date().toISOString()
   });
 }
-export async function getRelevantMemoriesByType(characterId, currentContext, types = []) {
-  // Get all relevant memories
-  const allMemories = await retrieveMemories(characterId, currentContext);
-  
-  // If no type filter, return all memories
-  if (!types || types.length === 0) {
-    return allMemories;
+
+/**
+ * Store a memory in Firebase
+ */
+export async function storeMemory(characterId, content, metadata = {}) {
+  try {
+    // Create the memory object with string content
+    const memory = {
+      characterId,
+      content: String(content), // Ensure content is a string
+      metadata: {
+        ...metadata,
+        timestamp: metadata.timestamp || new Date().toISOString(),
+        type: metadata.type || 'general',
+        importance: metadata.importance || 5
+      }
+    };
+
+    // Add to Firebase
+    const docRef = await addDoc(collection(db, 'memories'), memory);
+    
+    console.log(`Memory stored for character ${characterId} with ID: ${docRef.id}`);
+    return { id: docRef.id, ...memory };
+  } catch (error) {
+    console.error('Error storing memory in Firebase:', error);
+    throw error;
   }
-  
-  // Filter memories by requested types
-  const typesUppercase = types.map(t => t.toUpperCase());
-  const filteredMemories = allMemories.filter(memory => 
-    typesUppercase.includes(memory.type?.toUpperCase())
-  );
-  
-  return filteredMemories;
+}
+
+/**
+ * Get all memories for a character from Firebase
+ */
+export async function getCharacterMemories(characterId) {
+  try {
+    const memoriesQuery = query(
+      collection(db, 'memories'),
+      where('characterId', '==', characterId)
+    );
+    
+    const memoriesSnapshot = await getDocs(memoriesQuery);
+    const memories = [];
+    
+    memoriesSnapshot.forEach((doc) => {
+      memories.push({ id: doc.id, ...doc.data() });
+    });
+    
+    return memories;
+  } catch (error) {
+    console.error('Error retrieving memories from Firebase:', error);
+    return [];
+  }
+}
+
+/**
+ * Delete a memory from Firebase
+ */
+export async function deleteMemory(characterId, memoryId) {
+  try {
+    await deleteDoc(doc(db, 'memories', memoryId));
+    console.log(`Memory ${memoryId} deleted for character ${characterId}`);
+    return true;
+  } catch (error) {
+    console.error('Error deleting memory from Firebase:', error);
+    throw error;
+  }
+}
+
+/**
+ * Update a memory in Firebase
+ */
+export async function updateMemory(memoryId, updates) {
+  try {
+    const memoryRef = doc(db, 'memories', memoryId);
+    await updateDoc(memoryRef, updates);
+    console.log(`Memory ${memoryId} updated`);
+    return true;
+  } catch (error) {
+    console.error('Error updating memory in Firebase:', error);
+    throw error;
+  }
 }
 
 /**
@@ -89,57 +154,64 @@ export async function processCharacterInteraction(characterId, interaction) {
   }
 }
 
-export async function getPersonalityMemories(characterId) {
-  const personalityContext = "personality traits behavior patterns opinions preferences";
-  
-  // Retrieve memories related to personality
-  const memories = await retrieveMemories(characterId, personalityContext);
-  
-  // Prioritize PREFERENCE and RELATIONSHIP memories
-  const sortedMemories = memories.sort((a, b) => {
-    // Prioritize by type
-    const typeOrder = {
-      'PREFERENCE': 1,
-      'RELATIONSHIP': 2,
-      'FACT': 3,
-      'EVENT': 4,
-      'CONVERSATION': 5
-    };
-    
-    const aTypeOrder = typeOrder[a.type] || 99;
-    const bTypeOrder = typeOrder[b.type] || 99;
-    
-    if (aTypeOrder !== bTypeOrder) {
-      return aTypeOrder - bTypeOrder;
-    }
-    
-    // If same type, prioritize by importance
-    return (b.importance || 0) - (a.importance || 0);
-  });
-  
-  return sortedMemories;
-}
-
-
-
 /**
  * Get relevant memories for the current conversation
  */
 export async function getRelevantMemories(characterId, currentContext) {
   try {
-    const memories = await retrieveMemories(characterId, currentContext);
+    const allMemories = await getCharacterMemories(characterId);
     
-    if (!Array.isArray(memories)) {
+    if (!Array.isArray(allMemories)) {
       console.warn(`Retrieved memories is not an array for character ${characterId}.`);
       return "";
     }
     
-    if (memories.length === 0) return "";
+    if (allMemories.length === 0) return "";
+    
+    // Simple relevance scoring - a real implementation would use embeddings
+    const scoredMemories = allMemories.map(memory => {
+      // Basic keyword match
+      const content = memory.content || '';
+      const contentLower = content.toLowerCase();
+      const contextLower = (currentContext || '').toLowerCase();
+      
+      // Count matching words
+      const contentWords = contentLower.split(/\W+/);
+      const contextWords = contextLower.split(/\W+/);
+      
+      let matchCount = 0;
+      contextWords.forEach(word => {
+        if (word.length > 3 && contentWords.includes(word)) {
+          matchCount++;
+        }
+      });
+      
+      // Calculate score (0-1)
+      const score = contextWords.length > 0 
+        ? matchCount / contextWords.length 
+        : 0;
+        
+      return {
+        ...memory,
+        relevanceScore: score
+      };
+    });
+    
+    // Sort by relevance and importance
+    const relevantMemories = scoredMemories
+      .filter(memory => memory.relevanceScore > 0.1 || (memory.metadata?.importance || 0) > 7)
+      .sort((a, b) => {
+        // Combine relevance and importance
+        const scoreA = a.relevanceScore * 0.6 + (a.metadata?.importance || 0) * 0.4 / 10;
+        const scoreB = b.relevanceScore * 0.6 + (b.metadata?.importance || 0) * 0.4 / 10;
+        return scoreB - scoreA;
+      })
+      .slice(0, 10); // Limit to 10 most relevant memories
     
     // Format memories into a string for the prompt
-    const formattedMemories = memories.map(memory => {
-      const timeAgo = getTimeAgo(memory.timestamp);
-      return `- (${memory.type}, ${timeAgo}) ${memory.content}`;
+    const formattedMemories = relevantMemories.map(memory => {
+      const timeAgo = getTimeAgo(memory.metadata?.timestamp);
+      return `- (${memory.metadata?.type || 'memory'}, ${timeAgo}) ${memory.content}`;
     }).join('\n');
     
     return formattedMemories;
@@ -148,6 +220,32 @@ export async function getRelevantMemories(characterId, currentContext) {
     return "";
   }
 }
+
+/**
+ * Get memories relevant to personality for a character
+ */
+export async function getPersonalityMemories(characterId) {
+  try {
+    const allMemories = await getCharacterMemories(characterId);
+    
+    // Filter memories related to personality
+    const personalityMemories = allMemories.filter(memory => {
+      const type = memory.metadata?.type?.toUpperCase() || '';
+      return type === 'PREFERENCE' || type === 'RELATIONSHIP' || type === 'FACT';
+    });
+    
+    // Sort by importance
+    const sortedMemories = personalityMemories.sort((a, b) => {
+      return (b.metadata?.importance || 0) - (a.metadata?.importance || 0);
+    });
+    
+    return sortedMemories.slice(0, 7); // Return top 7
+  } catch (error) {
+    console.error(`Error retrieving personality memories for character ${characterId}:`, error);
+    return [];
+  }
+}
+
 /**
  * Extract and store important information from a conversation
  */
@@ -206,6 +304,8 @@ export async function processConversation(characterId, conversation) {
  * Get a readable time difference
  */
 export function getTimeAgo(timestamp) {
+  if (!timestamp) return 'unknown time';
+  
   const now = new Date();
   const then = new Date(timestamp);
   const diffMs = now - then;
@@ -222,15 +322,41 @@ export function getTimeAgo(timestamp) {
 }
 
 /**
- * Delete a specific memory
+ * Alias for deleteMemory for backwards compatibility
  */
 export async function removeMemory(characterId, memoryId) {
   return await deleteMemory(characterId, memoryId);
 }
 
 /**
- * Get all memories for management
+ * Get memories by type
  */
-export async function getCharacterMemories(characterId) {
-  return await getAllMemories(characterId);
+export async function getRelevantMemoriesByType(characterId, currentContext, types = []) {
+  try {
+    const allMemories = await getCharacterMemories(characterId);
+    
+    // If no type filter, return all memories
+    if (!types || types.length === 0) {
+      return allMemories;
+    }
+    
+    // Filter memories by requested types
+    const typesUppercase = types.map(t => t.toUpperCase());
+    const filteredMemories = allMemories.filter(memory => {
+      const memoryType = memory.metadata?.type || memory.type;
+      return typesUppercase.includes(memoryType?.toUpperCase());
+    });
+    
+    return filteredMemories;
+  } catch (error) {
+    console.error(`Error retrieving memories by type for character ${characterId}:`, error);
+    return [];
+  }
+}
+
+/**
+ * Alias for getCharacterMemories for backwards compatibility
+ */
+export async function getAllMemories(characterId) {
+  return await getCharacterMemories(characterId);
 }

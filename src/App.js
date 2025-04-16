@@ -9,19 +9,22 @@ import { db } from './firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
 // Import components and pages
+import OllamaDiagnosticPage from './pages/OllamaDiagnosticPage';
+import './styles/OllamaDiagnostic.css';
+
 import Dashboard from './pages/Dashboard';
 import CharactersPage from './pages/CharactersPage';
 import EnvironmentsPage from './pages/EnvironmentsPage';
 import MapPage from './pages/MapPage';
 import TimelinePage from './pages/TimelinePage';
-import ChatPage from './pages/ChatPage';
+import ChatPage from './pages/UpdatedChatPage';
 import ImportExportPage from './pages/ImportExportPage';
 import ErrorSuppressor from './components/ErrorSuppressor';
 import CharacterMemoriesPage from './pages/CharacterMemoriesPage';
 import WorldsPage from './pages/WorldsPage';
 import CampaignsPage from './pages/CampaignsPage';
 import CampaignSessionPage from './pages/CampaignSessionPage';
-import CampaignSettingsPage from './pages/CampaignSettingsPage'; // Ensure this import is present
+import CampaignSettingsPage from './pages/CampaignSettingsPage';
 import CampaignsIndexPage from './pages/CampaignsIndexPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import AuthPage from './pages/AuthPage';
@@ -32,6 +35,7 @@ import DecorativeElements from './components/DecorativeElements';
 import AzgaarMapIframe from './components/maps/AzgaarMapIframe';
 import LoginPage from 'pages/LoginPage';
 import WorldSelectionPage from './pages/WorldSelectionPage';
+import './styles/UpdatedChatPage.css';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -98,6 +102,7 @@ function App() {
                   <li><Link to="/import-export" onClick={() => setIsSidebarOpen(false)}>Import/Export</Link></li>
                   <li><Link to="/profile" onClick={() => setIsSidebarOpen(false)}>Profile</Link></li>
                   <li><Link to="/documentation" onClick={() => setIsSidebarOpen(false)}>Documentation</Link></li>
+                  <Link to="/diagnostics/ollama" className="feature-button">Run Diagnostics</Link>
                 </ul>
               </nav>
 
@@ -105,6 +110,7 @@ function App() {
               <main className={`main-content ${isSidebarOpen ? 'main-content-with-sidebar' : 'main-content-full'}`}>
                 <ErrorSuppressor>
                   <Routes>
+                    <Route path="/diagnostics/ollama" element={<ProtectedRoute><OllamaDiagnosticPage /></ProtectedRoute>} />
                     <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                     <Route path="/login" element={<LoginPage />} />
                     <Route path="/characters" element={<ProtectedRoute><CharactersPage /></ProtectedRoute>} />
@@ -118,7 +124,7 @@ function App() {
                     <Route path="/worlds" element={<ProtectedRoute><WorldsPage /></ProtectedRoute>} />
                     <Route path="/worlds/:worldId/campaigns" element={<ProtectedRoute><CampaignsPage /></ProtectedRoute>} />
                     <Route path="/campaigns/:campaignId/session" element={<ProtectedRoute><CampaignSessionPage /></ProtectedRoute>} />
-                    <Route path="/campaigns/:campaignId/settings" element={<ProtectedRoute><CampaignSettingsPage /></ProtectedRoute>} /> {/* Added ProtectedRoute */}
+                    <Route path="/campaigns/:campaignId/settings" element={<ProtectedRoute><CampaignSettingsPage /></ProtectedRoute>} />
                     <Route path="/campaigns" element={<ProtectedRoute><CampaignsIndexPage /></ProtectedRoute>} />
                     <Route path="/worlds/:worldId/map/fantasy" element={<ProtectedRoute><AzgaarMapIframe /></ProtectedRoute>} />
                     <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
