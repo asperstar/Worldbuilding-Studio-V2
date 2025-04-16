@@ -148,64 +148,67 @@ function CharactersPage() {
     });
   };
 
-  const handleSaveCharacter = async (newCharacter) => {
-    try {
-      setIsLoading(true);
-      setSaveError(null);
-      let updatedCharacter;
-      if (editingCharacter) {
-        updatedCharacter = {
-          ...newCharacter,
-          id: editingCharacter.id.toString(),
-          imageUrl: newCharacter.imageUrl || editingCharacter.imageUrl || '',
-          created: editingCharacter.created,
-          updated: new Date().toISOString(),
-          userId: currentUser.uid,
-          isDraft: false,
-        };
-      } else {
-        updatedCharacter = {
-          ...newCharacter,
-          id: `char_${Date.now()}`,
-          imageUrl: newCharacter.imageUrl || '',
-          created: new Date().toISOString(),
-          updated: new Date().toISOString(),
-          userId: currentUser.uid,
-          isDraft: false,
-        };
-      }
-  
-      await saveCharacter(updatedCharacter, currentUser.uid);
-      if (editingCharacter) {
-        setCharacters(prevChars =>
-          prevChars.map(char => (char.id === editingCharacter.id ? updatedCharacter : char))
-        );
-      } else {
-        setCharacters(prevChars => [...prevChars, updatedCharacter]);
-      }
-      setEditingCharacter(null);
-      setDraftCharacter(null);
-      setHasUnsavedChanges(false);
-      setFormData({
-        name: '',
-        traits: '',
-        personality: '',
-        background: '',
-        imageUrl: ''
-      });
-    } catch (error) {
-      console.error("Error saving character:", error);
-      if (error.message.includes('User not authenticated')) {
-        setError('Session expired. Please log in again.');
-        navigate('/login'); // Redirect to login page
-      } else {
-        setSaveError(`Failed to save character: ${error.message}`);
-      }
-    } finally {
-      setIsLoading(false);
+  // src/pages/CharactersPage.js
+const handleSaveCharacter = async (newCharacter) => {
+  try {
+    setIsLoading(true);
+    setSaveError(null);
+    let updatedCharacter;
+    if (editingCharacter) {
+      updatedCharacter = {
+        ...newCharacter,
+        id: editingCharacter.id.toString(),
+        imageFile: newCharacter.imageFile, // Include imageFile
+        imageUrl: newCharacter.imageUrl || editingCharacter.imageUrl || '',
+        created: editingCharacter.created,
+        updated: new Date().toISOString(),
+        userId: currentUser.uid,
+        isDraft: false,
+      };
+    } else {
+      updatedCharacter = {
+        ...newCharacter,
+        id: `char_${Date.now()}`,
+        imageFile: newCharacter.imageFile, // Include imageFile
+        imageUrl: newCharacter.imageUrl || '',
+        created: new Date().toISOString(),
+        updated: new Date().toISOString(),
+        userId: currentUser.uid,
+        isDraft: false,
+      };
     }
-  };
 
+    await saveCharacter(updatedCharacter, currentUser.uid);
+    if (editingCharacter) {
+      setCharacters(prevChars =>
+        prevChars.map(char => (char.id === editingCharacter.id ? updatedCharacter : char))
+      );
+    } else {
+      setCharacters(prevChars => [...prevChars, updatedCharacter]);
+    }
+    setEditingCharacter(null);
+    setDraftCharacter(null);
+    setHasUnsavedChanges(false);
+    setFormData({
+      name: '',
+      traits: '',
+      personality: '',
+      background: '',
+      imageUrl: '',
+      imageFile: null, // Reset imageFile
+    });
+  } catch (error) {
+    console.error("Error saving character:", error);
+    if (error.message.includes('User not authenticated')) {
+      setError('Session expired. Please log in again.');
+      navigate('/login');
+    } else {
+      setSaveError(`Failed to save character: ${error.message}`);
+    }
+  } finally {
+    setIsLoading(false);
+  }
+};
   const startEditing = (character) => {
     setEditingCharacter(character);
     setFormData({
@@ -232,21 +235,22 @@ function CharactersPage() {
     });
   };
 
-  const handleDeleteCharacter = async (characterId) => {
-    if (window.confirm('Are you sure you want to delete this character?')) {
-      try {
-        setIsLoading(true);
-        setError(null);
-        await deleteCharacter(characterId);
-        setCharacters(prevChars => prevChars.filter(char => char.id !== characterId));
-      } catch (error) {
-        console.error("Error deleting character:", error);
-        setError(`Failed to delete character: ${error.message}`);
-      } finally {
-        setIsLoading(false);
-      }
+  // src/pages/CharactersPage.js
+const handleDeleteCharacter = async (characterId) => {
+  if (window.confirm('Are you sure you want to delete this character?')) {
+    try {
+      setIsLoading(true);
+      setError(null);
+      await deleteCharacter(characterId, currentUser.uid); // Pass userId
+      setCharacters(prevChars => prevChars.filter(char => char.id !== characterId));
+    } catch (error) {
+      console.error("Error deleting character:", error);
+      setError(`Failed to delete character: ${error.message}`);
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }
+};
 
   const loadMoreCharacters = () => {
     setPage(prev => prev + 1);

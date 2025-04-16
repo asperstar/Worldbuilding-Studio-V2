@@ -1,8 +1,7 @@
-
-import { collection, getDocs, setDoc, doc, deleteDoc, query, where, getDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
-import { db } from './firebase';
-
+import { db, storage } from '../firebase';
+import { collection, getDocs, setDoc, doc, deleteDoc, query, where, getDoc, addDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const auth = getAuth();
 
@@ -15,7 +14,6 @@ const ensureAuthenticated = () => {
 };
 
 // Utility function to deep clean an object for Firestore
-// storageExports.js
 const deepCleanForFirestore = (obj, visited = new WeakSet()) => {
   // Handle null or undefined
   if (obj === null || obj === undefined) {
@@ -30,7 +28,7 @@ const deepCleanForFirestore = (obj, visited = new WeakSet()) => {
   // Check for circular references
   if (visited.has(obj)) {
     console.warn('Circular reference detected in object, skipping:', obj);
-    return null; // Or handle differently based on your needs
+    return null;
   }
 
   // Add the current object to visited
@@ -84,16 +82,8 @@ const deepCleanForFirestore = (obj, visited = new WeakSet()) => {
 // World functions
 export const loadWorlds = async (userId = null) => {
   try {
-    let userIdToUse = userId;
-    if (!userIdToUse) {
-      const user = await ensureAuthenticated();
-      userIdToUse = user;
-    }
-    if (!userIdToUse) {
-      console.error('No user ID available for query');
-      return [];
-    }
-    const worldsQuery = query(collection(db, 'worlds'), where('userId', '==', userIdToUse));
+    const userIdToUse = userId || (await ensureAuthenticated());
+    const worldsQuery = query(collection(db, `users/${userIdToUse}/worlds`));
     const worldsSnapshot = await getDocs(worldsQuery);
     const worlds = worldsSnapshot.docs.map(doc => ({
       id: doc.id,
@@ -108,18 +98,13 @@ export const loadWorlds = async (userId = null) => {
 
 export const loadWorldById = async (worldId, userId = null) => {
   try {
-    const user = await ensureAuthenticated();
-    const userIdToUse = userId || user;
-    const worldDoc = await getDoc(doc(db, 'worlds', worldId.toString()));
+    const userIdToUse = userId || (await ensureAuthenticated());
+    const worldDoc = await getDoc(doc(db, `users/${userIdToUse}/worlds`, worldId.toString()));
     if (worldDoc.exists()) {
-      const worldData = {
+      return {
         id: worldDoc.id,
         ...worldDoc.data()
       };
-      if (worldData.userId !== userIdToUse) {
-        throw new Error('Unauthorized access to world');
-      }
-      return worldData;
     } else {
       console.error(`World with ID ${worldId} not found`);
       return null;
@@ -130,17 +115,50 @@ export const loadWorldById = async (worldId, userId = null) => {
   }
 };
 
+export const saveWorld = async (worldData, userId = null) => {
+  try {
+    const userIdToUse = userId || (await ensureAuthenticated());
+    let imageUrl = worldData.imageUrl || '';
+    if (worldData.imageFile) {
+      const storageRef = ref(storage, `users/${userIdToUse}/worlds/${worldData.id || Date.now()}`);
+      await uploadBytes(storageRef, worldData.imageFile);
+      imageUrl = await getDownloadURL(storageRef);
+    }
+    const { imageFile, ...worldDataWithoutImage } = worldData;
+    const worldToSave = deepCleanForFirestore({
+      ...worldDataWithoutImage,
+      imageUrl,
+      userId: userIdToUse,
+      created: worldData.created || new Date().toISOString(),
+      updated: new Date().toISOString(),
+    });
+    if (!worldToSave || !worldToSave.id) {
+      throw new Error('Failed to clean world data');
+    }
+    await setDoc(doc(db, `users/${userIdToUse}/worlds`, worldToSave.id.toString()), worldToSave, { merge: true });
+    return { id: worldToSave.id, ...worldToSave };
+  } catch (error) {
+    console.error('Error saving world:', error);
+    throw error;
+  }
+};
+
 export const saveWorlds = async (worlds, userId = null) => {
   try {
-    const user = await ensureAuthenticated();
-    const userIdToUse = userId || user;
+    const userIdToUse = userId || (await ensureAuthenticated());
     for (const world of worlds) {
-      const worldToSave = deepCleanForFirestore({ ...world, userId: userIdToUse });
-      if (!worldToSave) {
+      const worldToSave = deepCleanForFirestore({
+        ...world,
+        userId: userIdToUse,
+        created: world.created || new Date().toISOString(),
+        updated: new Date().toISOString(),
+      });
+      if (!worldToSave || !worldToSave.id) {
         console.error('Failed to clean world data:', world);
         continue;
       }
-      await setDoc(doc(db, 'worlds', world.id.toString()), worldToSave);
+      await setDoc(doc(db, `users/${userIdToUse}/worlds`, worldToSave.id.toString()), worldToSave, { merge: true });
+      console.log(`World ${worldToSave.id} saved successfully`);
     }
     return true;
   } catch (error) {
@@ -151,17 +169,11 @@ export const saveWorlds = async (worlds, userId = null) => {
 
 export const deleteWorld = async (worldId, userId = null) => {
   try {
-    const user = await ensureAuthenticated();
-    const userIdToUse = userId || user;
-    const worldDoc = await getDoc(doc(db, 'worlds', worldId.toString()));
-    if (worldDoc.exists() && worldDoc.data().userId === userIdToUse) {
-      await deleteDoc(doc(db, 'worlds', worldId.toString()));
-      return true;
-    } else {
-      throw new Error('Unauthorized or world not found');
-    }
+    const userIdToUse = userId || (await ensureAuthenticated());
+    const worldRef = doc(db, `users/${userIdToUse}/worlds`, worldId);
+    await deleteDoc(worldRef);
   } catch (error) {
-    console.error('Error deleting world from Firestore:', { message: error.message, code: error.code, stack: error.stack });
+    console.error('Error deleting world:', error);
     throw error;
   }
 };
@@ -169,12 +181,10 @@ export const deleteWorld = async (worldId, userId = null) => {
 // Campaign functions
 export const loadWorldCampaigns = async (worldId, userId = null) => {
   try {
-    const user = await ensureAuthenticated();
-    const userIdToUse = userId || user;
+    const userIdToUse = userId || (await ensureAuthenticated());
     const campaignsQuery = query(
-      collection(db, 'campaigns'),
-      where('worldId', '==', parseInt(worldId)),
-      where('userId', '==', userIdToUse)
+      collection(db, `users/${userIdToUse}/campaigns`),
+      where('worldId', '==', worldId)
     );
     const campaignsSnapshot = await getDocs(campaignsQuery);
     const campaigns = campaignsSnapshot.docs.map(doc => ({
@@ -190,10 +200,9 @@ export const loadWorldCampaigns = async (worldId, userId = null) => {
 
 export const loadCampaign = async (campaignId, userId = null) => {
   try {
-    const user = await ensureAuthenticated();
-    const userIdToUse = userId || user;
+    const userIdToUse = userId || (await ensureAuthenticated());
     console.log(`Attempting to load campaign with ID: ${campaignId} for user: ${userIdToUse}`);
-    const campaignRef = doc(db, 'campaigns', campaignId);
+    const campaignRef = doc(db, `users/${userIdToUse}/campaigns`, campaignId);
     const campaignDoc = await getDoc(campaignRef);
     if (!campaignDoc.exists()) {
       console.error(`Campaign with ID ${campaignId} not found in Firestore`);
@@ -204,10 +213,6 @@ export const loadCampaign = async (campaignId, userId = null) => {
       ...campaignDoc.data()
     };
     console.log(`Loaded campaign data:`, campaignData);
-    if (campaignData.userId !== userIdToUse) {
-      console.error(`Unauthorized access: campaign userId (${campaignData.userId}) does not match authenticated user (${userIdToUse})`);
-      throw new Error(`Unauthorized access to campaign with ID ${campaignId}`);
-    }
     return campaignData;
   } catch (error) {
     console.error('Error loading campaign from Firestore:', { message: error.message, code: error.code, stack: error.stack });
@@ -215,11 +220,19 @@ export const loadCampaign = async (campaignId, userId = null) => {
   }
 };
 
-export const saveCampaign = async (campaign, userId) => {
+export const saveCampaign = async (campaign, userId = null) => {
   try {
-    const campaignRef = doc(db, 'campaigns', campaign.id);
-    await setDoc(campaignRef, { ...campaign, userId }, { merge: true });
-    console.log(`Campaign ${campaign.id} saved successfully`);
+    const userIdToUse = userId || (await ensureAuthenticated());
+    const campaignToSave = deepCleanForFirestore({
+      ...campaign,
+      userId: userIdToUse,
+      updated: new Date().toISOString(),
+    });
+    if (!campaignToSave || !campaignToSave.id) {
+      throw new Error('Failed to clean campaign data');
+    }
+    await setDoc(doc(db, `users/${userIdToUse}/campaigns`, campaignToSave.id.toString()), campaignToSave, { merge: true });
+    console.log(`Campaign ${campaignToSave.id} saved successfully`);
     return true;
   } catch (error) {
     console.error('Error saving campaign to Firestore:', error);
@@ -229,21 +242,21 @@ export const saveCampaign = async (campaign, userId) => {
 
 export const updateCampaign = async (campaign, userId = null) => {
   try {
-    const user = await ensureAuthenticated();
-    const userIdToUse = userId || user;
+    const userIdToUse = userId || (await ensureAuthenticated());
     console.log('updateCampaign: Using userId:', userIdToUse);
-    if (typeof userIdToUse !== 'string') {
-      throw new Error('userId must be a string, received: ' + typeof userIdToUse);
-    }
     console.log(`Updating campaign ${campaign.id} for user ${userIdToUse}`);
     console.log('updateCampaign: Original campaign data:', campaign);
-    const campaignToSave = deepCleanForFirestore({ ...campaign, userId: userIdToUse });
+    const campaignToSave = deepCleanForFirestore({
+      ...campaign,
+      userId: userIdToUse,
+      updated: new Date().toISOString(),
+    });
     console.log('updateCampaign: Cleaned campaign data:', campaignToSave);
     if (!campaignToSave || !campaignToSave.id) {
       throw new Error('Failed to clean campaign data for update');
     }
-    await setDoc(doc(db, 'campaigns', campaign.id.toString()), campaignToSave);
-    console.log(`Campaign ${campaign.id} updated successfully`);
+    await setDoc(doc(db, `users/${userIdToUse}/campaigns`, campaignToSave.id.toString()), campaignToSave, { merge: true });
+    console.log(`Campaign ${campaignToSave.id} updated successfully`);
     return true;
   } catch (error) {
     console.error('Error updating campaign in Firestore:', { message: error.message, code: error.code, stack: error.stack });
@@ -253,15 +266,10 @@ export const updateCampaign = async (campaign, userId = null) => {
 
 export const deleteCampaign = async (campaignId, userId = null) => {
   try {
-    const user = await ensureAuthenticated();
-    const userIdToUse = userId || user;
-    const campaignDoc = await getDoc(doc(db, 'campaigns', campaignId.toString()));
-    if (campaignDoc.exists() && campaignDoc.data().userId === userIdToUse) {
-      await deleteDoc(doc(db, 'campaigns', campaignId.toString()));
-      return true;
-    } else {
-      throw new Error('Unauthorized or campaign not found');
-    }
+    const userIdToUse = userId || (await ensureAuthenticated());
+    const campaignRef = doc(db, `users/${userIdToUse}/campaigns`, campaignId.toString());
+    await deleteDoc(campaignRef);
+    return true;
   } catch (error) {
     console.error('Error deleting campaign from Firestore:', { message: error.message, code: error.code, stack: error.stack });
     throw error;
@@ -271,14 +279,13 @@ export const deleteCampaign = async (campaignId, userId = null) => {
 // Character functions
 export const loadCharacters = async (userId = null, projectId = null) => {
   try {
-    const user = await ensureAuthenticated();
-    const userIdToUse = userId || user;
-    const constraints = [where('userId', '==', userIdToUse)];
+    const userIdToUse = userId || (await ensureAuthenticated());
+    const constraints = [];
     if (projectId) {
       constraints.push(where('projectId', '==', projectId));
     }
     const charactersQuery = query(
-      collection(db, 'characters'),
+      collection(db, `users/${userIdToUse}/characters`),
       ...constraints
     );
     const charactersSnapshot = await getDocs(charactersQuery);
@@ -300,48 +307,52 @@ export const loadCharacters = async (userId = null, projectId = null) => {
   }
 };
 
-export const saveCharacter = async (character, userId) => {
+export const saveCharacter = async (characterData, userId = null) => {
   try {
-    const authenticatedUserId = ensureAuthenticated();
-    if (authenticatedUserId !== userId) {
-      throw new Error('Authenticated user does not match the provided userId.');
+    const userIdToUse = userId || (await ensureAuthenticated());
+    let imageUrl = characterData.imageUrl || '';
+    if (characterData.imageFile) {
+      const storageRef = ref(storage, `users/${userIdToUse}/characters/${characterData.id || Date.now()}`);
+      await uploadBytes(storageRef, characterData.imageFile);
+      imageUrl = await getDownloadURL(storageRef);
     }
-
-    console.log('saveCharacter: userId:', userId);
-    console.log('saveCharacter: Original character data:', character);
-
-    const characterRef = doc(db, 'characters', character.id);
-    const cleanedCharacter = { ...character };
-
-    console.log('saveCharacter: Document does not exist, performing create operation');
-    console.log('saveCharacter: Cleaned character data:', cleanedCharacter);
-
-    await setDoc(characterRef, cleanedCharacter, { merge: true });
-    console.log(`Character ${character.id} saved successfully`);
-    return true;
+    const { imageFile, ...characterDataWithoutImage } = characterData;
+    const characterToSave = deepCleanForFirestore({
+      ...characterDataWithoutImage,
+      imageUrl,
+      userId: userIdToUse,
+      created: characterData.created || new Date().toISOString(),
+      updated: new Date().toISOString(),
+    });
+    if (!characterToSave || !characterToSave.id) {
+      throw new Error('Failed to clean character data');
+    }
+    await setDoc(doc(db, `users/${userIdToUse}/characters`, characterToSave.id.toString()), characterToSave, { merge: true });
+    return { id: characterToSave.id, ...characterToSave };
   } catch (error) {
-    console.error('Error saving character to Firestore:', error);
-    throw new Error(`Error saving character: ${error.message}`);
+    console.error('Error saving character:', error);
+    throw error;
   }
 };
 
 export const saveCharacters = async (characters, userId = null) => {
   try {
-    const user = await ensureAuthenticated();
-    const userIdToUse = userId || user;
+    const userIdToUse = userId || (await ensureAuthenticated());
     console.log('saveCharacters: Using userId:', userIdToUse);
-    if (typeof userIdToUse !== 'string') {
-      throw new Error('userId must be a string, received: ' + typeof userIdToUse);
-    }
     for (const character of characters) {
       console.log('saveCharacters: Original character data:', character);
-      const characterToSave = deepCleanForFirestore({ ...character, userId: userIdToUse });
+      const characterToSave = deepCleanForFirestore({
+        ...character,
+        userId: userIdToUse,
+        created: character.created || new Date().toISOString(),
+        updated: new Date().toISOString(),
+      });
       console.log('saveCharacters: Cleaned character data:', characterToSave);
       if (!characterToSave || !characterToSave.id) {
         console.error('Failed to clean character data:', character);
         continue;
       }
-      await setDoc(doc(db, 'characters', characterToSave.id.toString()), characterToSave);
+      await setDoc(doc(db, `users/${userIdToUse}/characters`, characterToSave.id.toString()), characterToSave, { merge: true });
       console.log(`Character ${characterToSave.id} saved successfully`);
     }
     return true;
@@ -353,17 +364,11 @@ export const saveCharacters = async (characters, userId = null) => {
 
 export const deleteCharacter = async (characterId, userId = null) => {
   try {
-    const user = await ensureAuthenticated();
-    const userIdToUse = userId || user;
-    const characterDoc = await getDoc(doc(db, 'characters', characterId.toString()));
-    if (characterDoc.exists() && characterDoc.data().userId === userIdToUse) {
-      await deleteDoc(doc(db, 'characters', characterId.toString()));
-      return true;
-    } else {
-      throw new Error('Unauthorized or character not found');
-    }
+    const userIdToUse = userId || (await ensureAuthenticated());
+    const characterRef = doc(db, `users/${userIdToUse}/characters`, characterId);
+    await deleteDoc(characterRef);
   } catch (error) {
-    console.error('Error deleting character from Firestore:', { message: error.message, code: error.code, stack: error.stack });
+    console.error('Error deleting character:', error);
     throw error;
   }
 };
@@ -371,14 +376,13 @@ export const deleteCharacter = async (characterId, userId = null) => {
 // Environment functions
 export const loadEnvironments = async (userId = null, projectId = null) => {
   try {
-    const user = await ensureAuthenticated();
-    const userIdToUse = userId || user;
-    const constraints = [where('userId', '==', userIdToUse)];
+    const userIdToUse = userId || (await ensureAuthenticated());
+    const constraints = [];
     if (projectId) {
       constraints.push(where('projectId', '==', projectId));
     }
     const environmentsQuery = query(
-      collection(db, 'environments'),
+      collection(db, `users/${userIdToUse}/environments`),
       ...constraints
     );
     const environmentsSnapshot = await getDocs(environmentsQuery);
@@ -393,23 +397,49 @@ export const loadEnvironments = async (userId = null, projectId = null) => {
   }
 };
 
+export const saveEnvironment = async (environmentData, userId = null) => {
+  try {
+    const userIdToUse = userId || (await ensureAuthenticated());
+    let imageUrl = environmentData.imageUrl || '';
+    if (environmentData.imageFile) {
+      const storageRef = ref(storage, `users/${userIdToUse}/environments/${environmentData.id || Date.now()}`);
+      await uploadBytes(storageRef, environmentData.imageFile);
+      imageUrl = await getDownloadURL(storageRef);
+    }
+    const { imageFile, ...environmentDataWithoutImage } = environmentData;
+    const environmentToSave = deepCleanForFirestore({
+      ...environmentDataWithoutImage,
+      imageUrl,
+      userId: userIdToUse,
+      created: environmentData.created || new Date().toISOString(),
+      updated: new Date().toISOString(),
+    });
+    if (!environmentToSave || !environmentToSave.id) {
+      throw new Error('Failed to clean environment data');
+    }
+    await setDoc(doc(db, `users/${userIdToUse}/environments`, environmentToSave.id.toString()), environmentToSave, { merge: true });
+    return { id: environmentToSave.id, ...environmentToSave };
+  } catch (error) {
+    console.error('Error saving environment:', error);
+    throw error;
+  }
+};
+
 export const saveEnvironments = async (environments, userId = null) => {
   try {
-    const user = await ensureAuthenticated();
-    const userIdToUse = userId || user;
-    console.log('saveEnvironments: Using userId:', userIdToUse);
-    if (typeof userIdToUse !== 'string') {
-      throw new Error('userId must be a string, received: ' + typeof userIdToUse);
-    }
+    const userIdToUse = userId || (await ensureAuthenticated());
     for (const environment of environments) {
-      console.log('saveEnvironments: Original environment data:', environment);
-      const environmentToSave = deepCleanForFirestore({ ...environment, userId: userIdToUse });
-      console.log('saveEnvironments: Cleaned environment data:', environmentToSave);
+      const environmentToSave = deepCleanForFirestore({
+        ...environment,
+        userId: userIdToUse,
+        created: environment.created || new Date().toISOString(),
+        updated: new Date().toISOString(),
+      });
       if (!environmentToSave || !environmentToSave.id) {
         console.error('Failed to clean environment data:', environment);
         continue;
       }
-      await setDoc(doc(db, 'environments', environmentToSave.id.toString()), environmentToSave);
+      await setDoc(doc(db, `users/${userIdToUse}/environments`, environmentToSave.id.toString()), environmentToSave, { merge: true });
       console.log(`Environment ${environmentToSave.id} saved successfully`);
     }
     return true;
@@ -421,17 +451,11 @@ export const saveEnvironments = async (environments, userId = null) => {
 
 export const deleteEnvironment = async (environmentId, userId = null) => {
   try {
-    const user = await ensureAuthenticated();
-    const userIdToUse = userId || user;
-    const environmentDoc = await getDoc(doc(db, 'environments', environmentId.toString()));
-    if (environmentDoc.exists() && environmentDoc.data().userId === userIdToUse) {
-      await deleteDoc(doc(db, 'environments', environmentId.toString()));
-      return true;
-    } else {
-      throw new Error('Unauthorized or environment not found');
-    }
+    const userIdToUse = userId || (await ensureAuthenticated());
+    const environmentRef = doc(db, `users/${userIdToUse}/environments`, environmentId);
+    await deleteDoc(environmentRef);
   } catch (error) {
-    console.error('Error deleting environment from Firestore:', { message: error.message, code: error.code, stack: error.stack });
+    console.error('Error deleting environment:', error);
     throw error;
   }
 };
@@ -439,9 +463,8 @@ export const deleteEnvironment = async (environmentId, userId = null) => {
 // Map functions
 export const loadMapData = async (userId = null) => {
   try {
-    const user = await ensureAuthenticated();
-    const userIdToUse = userId || user;
-    const mapDoc = await getDoc(doc(db, 'maps', userIdToUse));
+    const userIdToUse = userId || (await ensureAuthenticated());
+    const mapDoc = await getDoc(doc(db, `users/${userIdToUse}/maps`, userIdToUse));
     if (mapDoc.exists()) {
       const mapData = mapDoc.data();
       return {
@@ -460,12 +483,8 @@ export const loadMapData = async (userId = null) => {
 
 export const saveMapData = async (userId, mapData) => {
   try {
-    const user = await ensureAuthenticated();
-    const userIdToUse = userId || user;
+    const userIdToUse = userId || (await ensureAuthenticated());
     console.log('saveMapData: Using userId:', userIdToUse);
-    if (typeof userIdToUse !== 'string') {
-      throw new Error('userId must be a string, received: ' + typeof userIdToUse);
-    }
     console.log('saveMapData: Original map data:', mapData);
     const mapToSave = deepCleanForFirestore({
       ...mapData,
@@ -476,7 +495,7 @@ export const saveMapData = async (userId, mapData) => {
     if (!mapToSave) {
       throw new Error('Failed to clean map data');
     }
-    await setDoc(doc(db, 'maps', userIdToUse), mapToSave);
+    await setDoc(doc(db, `users/${userIdToUse}/maps`, userIdToUse), mapToSave, { merge: true });
     console.log(`Map data for user ${userIdToUse} saved successfully`);
     return true;
   } catch (error) {
@@ -488,15 +507,10 @@ export const saveMapData = async (userId, mapData) => {
 // Timeline functions
 export const loadTimelineData = async (userId = null) => {
   try {
-    const user = await ensureAuthenticated();
-    const userIdToUse = userId || user;
-    const timelineDoc = await getDoc(doc(db, 'timelines', userIdToUse));
+    const userIdToUse = userId || (await ensureAuthenticated());
+    const timelineDoc = await getDoc(doc(db, `users/${userIdToUse}/timelines`, userIdToUse));
     if (timelineDoc.exists()) {
-      const timelineData = timelineDoc.data();
-      if (timelineData.userId !== userIdToUse) {
-        throw new Error('Unauthorized access to timeline');
-      }
-      return timelineData;
+      return timelineDoc.data();
     } else {
       return { events: [], sequences: ['Main Timeline'], userId: userIdToUse };
     }
@@ -508,19 +522,15 @@ export const loadTimelineData = async (userId = null) => {
 
 export const saveTimelineData = async (userId, timelineData) => {
   try {
-    const user = await ensureAuthenticated();
-    const userIdToUse = userId || user;
+    const userIdToUse = userId || (await ensureAuthenticated());
     console.log('saveTimelineData: Using userId:', userIdToUse);
-    if (typeof userIdToUse !== 'string') {
-      throw new Error('userId must be a string, received: ' + typeof userIdToUse);
-    }
     console.log('saveTimelineData: Original timeline data:', timelineData);
     const timelineToSave = deepCleanForFirestore({ ...timelineData, userId: userIdToUse });
     console.log('saveTimelineData: Cleaned timeline data:', timelineToSave);
     if (!timelineToSave) {
       throw new Error('Failed to clean timeline data');
     }
-    await setDoc(doc(db, 'timelines', userIdToUse), timelineToSave);
+    await setDoc(doc(db, `users/${userIdToUse}/timelines`, userIdToUse), timelineToSave, { merge: true });
     console.log(`Timeline data for user ${userIdToUse} saved successfully`);
     return true;
   } catch (error) {
@@ -532,8 +542,7 @@ export const saveTimelineData = async (userId, timelineData) => {
 // Export/Import functions
 export const exportAllData = async (options = {}) => {
   try {
-    const user = await ensureAuthenticated();
-    const userIdToUse = user;
+    const userIdToUse = await ensureAuthenticated();
     const data = {};
     if (options.characters) {
       data.characters = await loadCharacters(userIdToUse);
@@ -559,12 +568,7 @@ export const exportAllData = async (options = {}) => {
     if (options.timeline) {
       data.timelineData = await loadTimelineData(userIdToUse);
     }
-    if (options.memories) {
-      data.memories = {};
-    }
-    if (options.chats) {
-      data.chatData = {};
-    }
+    // TODO: Implement memories and chat data export in the future
     return data;
   } catch (error) {
     console.error('Error exporting data:', { message: error.message, code: error.code, stack: error.stack });
@@ -574,12 +578,8 @@ export const exportAllData = async (options = {}) => {
 
 export const importAllData = async (data, userId = null) => {
   try {
-    const user = await ensureAuthenticated();
-    const userIdToUse = userId || user;
+    const userIdToUse = userId || (await ensureAuthenticated());
     console.log('importAllData: Using userId:', userIdToUse);
-    if (typeof userIdToUse !== 'string') {
-      throw new Error('userId must be a string, received: ' + typeof userIdToUse);
-    }
     const results = [];
     if (data.characters && Array.isArray(data.characters)) {
       console.log('importAllData: Importing characters:', data.characters);
@@ -626,7 +626,7 @@ export const testStorage = async () => {
         authState: 'Not logged in' 
       };
     }
-    const worldsQuery = query(collection(db, 'worlds'), where('userId', '==', user.uid));
+    const worldsQuery = query(collection(db, `users/${user.uid}/worlds`));
     const snapshot = await getDocs(worldsQuery);
     console.log(`Firestore connectivity test: Retrieved ${snapshot.size} worlds`);
     return { 

@@ -3,9 +3,7 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { auth } from '../firebase';
 import { onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
-import { doc, getDoc, collection, addDoc, query, where, getDocs, updateDoc } from 'firebase/firestore'; // Added updateDoc
 import { db } from '../firebase';
-
 import {
   loadCharacters,
   saveCharacter,
@@ -21,7 +19,10 @@ import {
   loadCampaign,
   saveCampaign,
   loadWorldCampaigns,
-  testStorage
+  testStorage,
+  deleteWorld,
+  deleteEnvironment,
+  deleteCampaign,
 } from '../utils/storageExports';
 
 const StorageContext = createContext();
@@ -35,24 +36,25 @@ export function StorageProvider({ children }) {
     characters: null,
     environments: null,
     worlds: null,
+    campaigns: null,
     lastFetched: {
       characters: null,
       environments: null,
-      worlds: null
+      worlds: null,
+      campaigns: null,
     }
   });
 
   useEffect(() => {
-    // Auth state listener
     const unsubscribe = onAuthStateChanged(
       auth,
       (user) => {
-        console.log('onAuthStateChanged: User state:', user); // Debug log
+        console.log('onAuthStateChanged: User state:', user);
         setCurrentUser(user);
         setIsLoading(false);
       },
       (authError) => {
-        console.error('onAuthStateChanged error:', authError); // Debug log
+        console.error('onAuthStateChanged error:', authError);
         setError(authError.message);
         setIsLoading(false);
       }
@@ -64,13 +66,12 @@ export function StorageProvider({ children }) {
   const testFirebaseConnection = async () => {
     try {
       const result = await testStorage();
-      // Update state in a safer way
       setFirebaseStatus((prev) => ({
         ...prev,
         tested: true,
         working: result.success
       }));
-  
+
       if (!result.success) {
         console.error('Firebase connection test failed:', result.error);
         setError(`Firebase connection error: ${result.error}`);
@@ -153,10 +154,12 @@ export function StorageProvider({ children }) {
         characters: null,
         environments: null,
         worlds: null,
+        campaigns: null,
         lastFetched: {
           characters: null,
           environments: null,
-          worlds: null
+          worlds: null,
+          campaigns: null,
         }
       });
       return true;
@@ -240,7 +243,7 @@ export function StorageProvider({ children }) {
       return false;
     }
     try {
-      await saveCharacters(characters, currentUser.uid); // Pass UID instead of currentUser
+      await saveCharacters(characters, currentUser.uid);
       setCachedData(prev => ({
         ...prev,
         characters,
@@ -287,6 +290,14 @@ export function StorageProvider({ children }) {
             characters: new Date()
           }
         }));
+      } else {
+        setCachedData(prev => ({
+          ...prev,
+          lastFetched: {
+            ...prev.lastFetched,
+            characters: null // Invalidate cache
+          }
+        }));
       }
       return true;
     } catch (error) {
@@ -306,7 +317,7 @@ export function StorageProvider({ children }) {
       return false;
     }
     try {
-      await deleteCharacter(characterId);
+      await deleteCharacter(characterId, currentUser.uid);
       if (cachedData.characters) {
         setCachedData(prev => ({
           ...prev,
@@ -314,6 +325,14 @@ export function StorageProvider({ children }) {
           lastFetched: {
             ...prev.lastFetched,
             characters: new Date()
+          }
+        }));
+      } else {
+        setCachedData(prev => ({
+          ...prev,
+          lastFetched: {
+            ...prev.lastFetched,
+            characters: null // Invalidate cache
           }
         }));
       }
@@ -381,7 +400,7 @@ export function StorageProvider({ children }) {
       return false;
     }
     try {
-      await saveEnvironments(environments, currentUser.uid); // Pass UID instead of currentUser
+      await saveEnvironments(environments, currentUser.uid);
       setCachedData(prev => ({
         ...prev,
         environments,
@@ -402,18 +421,52 @@ export function StorageProvider({ children }) {
     }
   };
 
+  const removeEnvironment = async (environmentId) => {
+    if (!currentUser) {
+      setError('User not authenticated. Please log in.');
+      return false;
+    }
+    try {
+      await deleteEnvironment(environmentId, currentUser.uid);
+      if (cachedData.environments) {
+        setCachedData(prev => ({
+          ...prev,
+          environments: prev.environments.filter(e => e.id !== environmentId),
+          lastFetched: {
+            ...prev.lastFetched,
+            environments: new Date()
+          }
+        }));
+      } else {
+        setCachedData(prev => ({
+          ...prev,
+          lastFetched: {
+            ...prev.lastFetched,
+            environments: null // Invalidate cache
+          }
+        }));
+      }
+      return true;
+    } catch (error) {
+      console.error('Error deleting environment:', error);
+      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
+        setError('Authentication error. Please log in again.');
+      } else {
+        setError('Failed to delete environment. Please try again.');
+      }
+      return false;
+    }
+  };
+
   const getWorldById = async (worldId) => {
     if (!currentUser) {
       setError('User not authenticated. Please log in.');
       return null;
     }
     try {
-      const worldRef = doc(db, 'worlds', worldId);
-      const worldSnap = await getDoc(worldRef);
-      if (worldSnap.exists()) {
-        return { id: worldSnap.id, ...worldSnap.data() };
-      }
-      return null;
+      const worlds = await loadWorlds(currentUser.uid);
+      const world = worlds.find(w => w.id === worldId);
+      return world || null;
     } catch (error) {
       console.error('Error fetching world by ID:', error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
@@ -444,7 +497,7 @@ export function StorageProvider({ children }) {
     }
 
     try {
-      const worlds = await loadWorlds();
+      const worlds = await loadWorlds(currentUser.uid);
       setCachedData(prev => ({
         ...prev,
         worlds,
@@ -467,6 +520,43 @@ export function StorageProvider({ children }) {
     }
   };
 
+  const removeWorld = async (worldId) => {
+    if (!currentUser) {
+      setError('User not authenticated. Please log in.');
+      return false;
+    }
+    try {
+      await deleteWorld(worldId, currentUser.uid);
+      if (cachedData.worlds) {
+        setCachedData(prev => ({
+          ...prev,
+          worlds: prev.worlds.filter(w => w.id !== worldId),
+          lastFetched: {
+            ...prev.lastFetched,
+            worlds: new Date()
+          }
+        }));
+      } else {
+        setCachedData(prev => ({
+          ...prev,
+          lastFetched: {
+            ...prev.lastFetched,
+            worlds: null // Invalidate cache
+          }
+        }));
+      }
+      return true;
+    } catch (error) {
+      console.error('Error deleting world:', error);
+      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
+        setError('Authentication error. Please log in again.');
+      } else {
+        setError('Failed to delete world. Please try again.');
+      }
+      return false;
+    }
+  };
+
   const getMapData = async () => {
     if (!currentUser) {
       setError('User not authenticated. Please log in.');
@@ -474,7 +564,7 @@ export function StorageProvider({ children }) {
     }
 
     try {
-      const mapData = await loadMapData();
+      const mapData = await loadMapData(currentUser.uid);
       console.log('Map data fetched in getMapData:', mapData);
       return mapData;
     } catch (error) {
@@ -514,7 +604,7 @@ export function StorageProvider({ children }) {
     }
 
     try {
-      return await loadTimelineData();
+      return await loadTimelineData(currentUser.uid);
     } catch (error) {
       console.error('Error loading timeline data:', error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
@@ -545,14 +635,14 @@ export function StorageProvider({ children }) {
     }
   };
 
-  const getCampaignById = async (campaignId) => { // Renamed to getCampaignById for consistency
+  const getCampaignById = async (campaignId) => {
     if (!currentUser) {
       setError('User not authenticated. Please log in.');
       return null;
     }
 
     try {
-      return await loadCampaign(campaignId);
+      return await loadCampaign(campaignId, currentUser.uid);
     } catch (error) {
       console.error(`Error loading campaign ${campaignId}:`, error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
@@ -574,6 +664,13 @@ export function StorageProvider({ children }) {
       console.log('updateCampaign: Saving campaign with data:', campaign);
       console.log('updateCampaign: Authenticated user UID:', currentUser.uid);
       const success = await saveCampaign(campaign, currentUser.uid);
+      setCachedData(prev => ({
+        ...prev,
+        lastFetched: {
+          ...prev.lastFetched,
+          campaigns: null // Invalidate cache
+        }
+      }));
       return success;
     } catch (error) {
       console.error('Error saving campaign:', error);
@@ -595,12 +692,24 @@ export function StorageProvider({ children }) {
     try {
       console.log('updateCampaignSession: Updating campaign with ID:', campaignId);
       console.log('updateCampaignSession: Session messages:', sessionMessages);
-      const campaignRef = doc(db, 'campaigns', campaignId);
-      await updateDoc(campaignRef, {
+      const campaign = await loadCampaign(campaignId, currentUser.uid);
+      if (!campaign) {
+        throw new Error('Campaign not found');
+      }
+      const updatedCampaign = {
+        ...campaign,
         sessionMessages,
         updated: new Date().toISOString(),
         userId: currentUser.uid
-      });
+      };
+      await saveCampaign(updatedCampaign, currentUser.uid);
+      setCachedData(prev => ({
+        ...prev,
+        lastFetched: {
+          ...prev.lastFetched,
+          campaigns: null // Invalidate cache
+        }
+      }));
       console.log(`Campaign session ${campaignId} updated successfully`);
       return true;
     } catch (error) {
@@ -614,14 +723,61 @@ export function StorageProvider({ children }) {
     }
   };
 
-  const getWorldCampaigns = async (worldId) => {
+  const removeCampaign = async (campaignId) => {
+    if (!currentUser) {
+      setError('User not authenticated. Please log in.');
+      return false;
+    }
+    try {
+      await deleteCampaign(campaignId, currentUser.uid);
+      setCachedData(prev => ({
+        ...prev,
+        lastFetched: {
+          ...prev.lastFetched,
+          campaigns: null // Invalidate cache
+        }
+      }));
+      return true;
+    } catch (error) {
+      console.error('Error deleting campaign:', error);
+      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
+        setError('Authentication error. Please log in again.');
+      } else {
+        setError('Failed to delete campaign. Please try again.');
+      }
+      return false;
+    }
+  };
+
+  const getWorldCampaigns = async (worldId, forceRefresh = false) => {
     if (!currentUser) {
       setError('User not authenticated. Please log in.');
       return [];
     }
 
+    const now = new Date();
+    const cacheExpiry = 5 * 60 * 1000;
+
+    if (
+      !forceRefresh &&
+      cachedData.campaigns &&
+      cachedData.lastFetched.campaigns &&
+      now - cachedData.lastFetched.campaigns < cacheExpiry
+    ) {
+      return cachedData.campaigns;
+    }
+
     try {
-      return await loadWorldCampaigns(worldId);
+      const campaigns = await loadWorldCampaigns(worldId, currentUser.uid);
+      setCachedData(prev => ({
+        ...prev,
+        campaigns,
+        lastFetched: {
+          ...prev.lastFetched,
+          campaigns: now
+        }
+      }));
+      return campaigns;
     } catch (error) {
       console.error(`Error loading campaigns for world ${worldId}:`, error);
       if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
@@ -651,15 +807,18 @@ export function StorageProvider({ children }) {
     getEnvironments,
     getAllEnvironments,
     saveAllEnvironments,
+    removeEnvironment,
     getWorldById,
     getWorlds,
+    removeWorld,
     getMapData,
     updateMapData,
     getTimelineData,
     updateTimelineData,
-    getCampaignById, // Updated name
+    getCampaignById,
     updateCampaign,
-    updateCampaignSession, // Added
+    updateCampaignSession,
+    removeCampaign,
     getWorldCampaigns
   };
 
