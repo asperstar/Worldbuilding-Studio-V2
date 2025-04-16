@@ -84,7 +84,7 @@ export const getEnhancedContextMemories = async (characterId, currentContext, co
     return relevantMemories;
   } catch (error) {
     console.error('Error getting enhanced context memories:', error);
-    return allMemories.slice(0, 5); // Fallback to first 5 memories
+    return []; // Fallback to empty array instead of allMemories
   }
 };
 

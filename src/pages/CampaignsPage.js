@@ -7,6 +7,7 @@ import { useStorage } from '../contexts/StorageContext';
 import debounce from 'lodash/debounce';
 
 function CampaignsPage() {
+  const [worlds, setWorlds] = useState([]);
   const { worldId } = useParams();
   const { currentUser } = useStorage();
   const [world, setWorld] = useState(null);
@@ -27,35 +28,35 @@ function CampaignsPage() {
 
   // Load data on mount
   useEffect(() => {
-   
-const loadData = async () => {
-  try {
-    setIsLoading(true);
-    
-    // Load world
-    const worlds = await loadWorlds(currentUser?.uid);
-    const parsedWorldId = parseInt(worldId);
-    const foundWorld = worlds.find(w => w.id === parsedWorldId);
-    setWorld(foundWorld);
-    
-    // Load campaigns - make sure to pass both worldId and userId
-    if (foundWorld) {
-      const worldCampaigns = await loadWorldCampaigns(foundWorld.id, currentUser?.uid);
-      setCampaigns(worldCampaigns || []);
-    }
-    
-    // Load characters - pass the userId
-    const loadedCharacters = await loadCharacters(currentUser?.uid);
-    setCharacters(loadedCharacters || []);
-    
-    setIsLoading(false);
-  } catch (error) {
-    console.error('Error loading data:', error);
-    setError('Failed to load data. Please try again.');
-    setIsLoading(false);
-  }
-};
-
+    const loadData = async () => {
+      try {
+        setIsLoading(true);
+  
+        // Load worlds
+        const loadedWorlds = await loadWorlds(currentUser?.uid);
+        setWorlds(loadedWorlds || []); // Store the full worlds array
+        const parsedWorldId = parseInt(worldId);
+        const foundWorld = loadedWorlds.find(w => w.id === parsedWorldId);
+        setWorld(foundWorld);
+  
+        // Load campaigns
+        if (foundWorld) {
+          const worldCampaigns = await loadWorldCampaigns(foundWorld.id, currentUser?.uid);
+          setCampaigns(worldCampaigns || []);
+        }
+  
+        // Load characters
+        const loadedCharacters = await loadCharacters(currentUser?.uid);
+        setCharacters(loadedCharacters || []);
+  
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error loading data:', error);
+        setError('Failed to load data. Please try again.');
+        setIsLoading(false);
+      }
+    };
+  
     if (currentUser) {
       loadData();
     }
@@ -369,41 +370,39 @@ const loadData = async () => {
                 <p>No characters available. Go create some characters first!</p>
               ) : (
                 <ul>
-                  {characters.map(character => (
-                    <li key={character.id} className="character-selection-item">
-                      <label className="character-checkbox">
-                        <input
-                          type="checkbox"
-                          checked={selectedCharacters.includes(character.id)}
-                          onChange={() => toggleCharacterSelection(character.id)}
-                        />
-                        {selectedCharacter && (
-  <div className="character-chat-header">
-    <h2>{selectedCharacter.name}</h2>
-    {selectedCharacter.worldId && (
-      <div className="world-badge">
-        From {worlds.find(w => w.id === selectedCharacter.worldId)?.name || 'Unknown World'}
+                 {characters.map(character => (
+  <li key={character.id} className="character-selection-item">
+    <label className="character-checkbox">
+      <input
+        type="checkbox"
+        checked={selectedCharacters.includes(character.id)}
+        onChange={() => toggleCharacterSelection(character.id)}
+      />
+      <div className="character-chat-header">
+        <h2>{character.name}</h2>
+        {character.worldId && (
+          <div className="world-badge">
+            From {worlds.find(w => w.id === character.worldId)?.name || 'Unknown World'}
+          </div>
+        )}
       </div>
-    )}
-  </div>
-)}
-                        <div className="character-info">
-                          {character.imageUrl ? (
-                            <img
-                              src={character.imageUrl}
-                              alt={character.name}
-                              className="character-thumbnail"
-                            />
-                          ) : (
-                            <div className="character-initial">
-                              {character.name ? character.name[0].toUpperCase() : '?'}
-                            </div>
-                          )}
-                          <span>{character.name}</span>
-                        </div>
-                      </label>
-                    </li>
-                  ))}
+      <div className="character-info">
+        {character.imageUrl ? (
+          <img
+            src={character.imageUrl}
+            alt={character.name}
+            className="character-thumbnail"
+          />
+        ) : (
+          <div className="character-initial">
+            {character.name ? character.name[0].toUpperCase() : '?'}
+          </div>
+        )}
+        <span>{character.name}</span>
+      </div>
+    </label>
+  </li>
+))}
                 </ul>
               )}
             </div>
