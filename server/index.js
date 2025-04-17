@@ -1,3 +1,4 @@
+// src/index.js
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -15,15 +16,15 @@ if (!process.env.REPLICATE_API_KEY) {
   process.exit(1);
 }
 
-// Define the handler function (same as the serverless function)
+// Define the handler function for Vercel serverless
 const handler = async (req, res) => {
   // CORS configuration
-  const corsMiddleware = cors({
+  const corsOptions = {
     origin: (origin, callback) => {
       const allowedOrigins = [
         'http://localhost:3000', // For local development
         'https://worldbuilding-app-plum.vercel.app',
-        /\.vercel\.app$/,
+        /\.vercel\.app$/, // Allow all Vercel subdomains
       ];
       if (!origin || allowedOrigins.some(allowed =>
         typeof allowed === 'string' ? allowed === origin : allowed.test(origin)
@@ -36,18 +37,29 @@ const handler = async (req, res) => {
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
     credentials: true,
-  });
+    optionsSuccessStatus: 204, // Ensure preflight requests return 204
+  };
 
   // Apply CORS middleware
+  const corsMiddleware = cors(corsOptions);
+
+  // Manually handle CORS for Vercel serverless environment
+  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+  // Handle preflight OPTIONS request
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return;
+  }
+
+  // Apply CORS middleware for other requests
   corsMiddleware(req, res, async () => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
     console.log('Headers:', req.headers);
     console.log('Body:', req.body);
-
-    if (req.method === 'OPTIONS') {
-      res.status(200).end();
-      return;
-    }
 
     if (req.method === 'GET' && req.url === '/') {
       res.status(200).send('Worldbuilding Backend is running!');

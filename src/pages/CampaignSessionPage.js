@@ -80,167 +80,166 @@ function CampaignSessionPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSendMessage = async () => {
-    if (!input.trim() || !campaign) return;
-  
-    // Determine if user is speaking as the Game Master
-    const isGM = speakingAs === 'GM';
-    const userMessage = {
-      sender: 'user',
-      text: input,
-      timestamp: new Date().toISOString(),
-      speaker: isGM ? 'Game Master' : speakingAs === 'PLAYER' ? 'Player' : characters.find(char => char.id === speakingAs)?.name || 'Unknown',
-    };
-    const updatedMessages = [...messages, userMessage];
-    setMessages(updatedMessages);
-    setInput('');
-    setIsSendingMessage(true);
-    setError(null);
-  
-    // If user is the GM and campaign is user-GM mode, just save the message without AI response
-    if (isGM && campaign.gmType === 'USER') {
-      await updateCampaignSession(campaignId, updatedMessages);
-      setIsSendingMessage(false);
-      return;
-    }
-  
-    try {
-      let aiResponder = 'Game Master';
-      let aiCharacterId = null;
-      let useGmMode = false;
-  
-      // Configure AI response based on the context
-      if (campaign.gmType === 'AI') {
-        // If AI is the GM, always use GM mode
-        useGmMode = true;
-        aiResponder = 'Game Master';
-        aiCharacterId = 'GM'; // Use special GM character ID
-      } else if (isGM) {
-        // User is GM but we still need an AI response for some reason
-        useGmMode = true;
-        aiResponder = 'Game Master';
-        aiCharacterId = 'GM';
-      } else if (speakingAs !== 'PLAYER') {
-        // User speaking as a specific character
-        const speakingAsCharacter = characters.find(char => char.id === speakingAs);
-        const otherCharacters = characters.filter(char => char.id !== speakingAs);
-        
-        if (otherCharacters.length > 0) {
-          // If there are other characters, pick one to respond
-          const respondingChar = otherCharacters[0];
-          aiCharacterId = respondingChar.id;
-          aiResponder = respondingChar.name;
-        } else {
-          // No other characters, use GM/Narrator
-          useGmMode = true;
-          aiResponder = 'Narrator';
-          aiCharacterId = 'GM';
-        }
+ // src/pages/CampaignSessionPage.js
+const handleSendMessage = async () => {
+  if (!input.trim() || !campaign) return;
+
+  const isGM = speakingAs === 'GM';
+  const userMessage = {
+    sender: 'user',
+    text: input,
+    timestamp: new Date().toISOString(),
+    speaker: isGM ? 'Game Master' : speakingAs === 'PLAYER' ? 'Player' : characters.find(char => char.id === speakingAs)?.name || 'Unknown',
+  };
+  const updatedMessages = [...messages, userMessage];
+  setMessages(updatedMessages);
+  setInput('');
+  setIsSendingMessage(true);
+  setError(null);
+
+  if (isGM && campaign.gmType === 'USER') {
+    await updateCampaignSession(campaignId, updatedMessages);
+    setIsSendingMessage(false);
+    return;
+  }
+
+  try {
+    let aiResponder = 'Game Master';
+    let aiCharacterId = null;
+    let useGmMode = false;
+
+    // Configure AI response based on the context
+    if (campaign.gmType === 'AI') {
+      useGmMode = true;
+      aiResponder = 'Game Master';
+      aiCharacterId = 'GM';
+    } else if (isGM) {
+      useGmMode = true;
+      aiResponder = 'Game Master';
+      aiCharacterId = 'GM';
+    } else if (speakingAs !== 'PLAYER') {
+      const speakingAsCharacter = characters.find(char => char.id === speakingAs);
+      const otherCharacters = characters.filter(char => char.id !== speakingAs);
+
+      if (otherCharacters.length > 0) {
+        // Find a character whose traits or background make them likely to respond
+        const likelyResponder = otherCharacters.find(char => {
+          const traits = (char.traits || '').toLowerCase();
+          const background = (char.background || '').toLowerCase();
+          const userMessageLower = input.toLowerCase();
+          return (
+            traits.includes('talkative') ||
+            traits.includes('curious') ||
+            background.includes('leader') ||
+            userMessageLower.includes(char.name.toLowerCase())
+          );
+        }) || otherCharacters[0]; // Fallback to first character if no match
+        aiCharacterId = likelyResponder.id;
+        aiResponder = likelyResponder.name;
       } else {
-        // Player is speaking as themselves
-        // Decision logic for who should respond based on conversation flow
-        const lastMessage = updatedMessages.length > 1 ? updatedMessages[updatedMessages.length - 2] : null;
-        const lastSpeaker = lastMessage?.speaker;
-        
-        if (lastSpeaker && lastSpeaker !== 'Player' && lastSpeaker !== 'Game Master') {
-          // If the last speaker was a character, have them respond
-          const respondingChar = characters.find(char => char.name === lastSpeaker);
-          if (respondingChar) {
-            aiCharacterId = respondingChar.id;
-            aiResponder = lastSpeaker;
-          } else {
-            // Character not found, fall back to GM
-            useGmMode = true;
-            aiResponder = 'Game Master';
-            aiCharacterId = 'GM';
-          }
-        } else if (characters.length > 0) {
-          // Choose a random character
-          const randomIndex = Math.floor(Math.random() * characters.length);
-          const randomChar = characters[randomIndex];
-          aiCharacterId = randomChar.id;
-          aiResponder = randomChar.name;
+        useGmMode = true;
+        aiResponder = 'Narrator';
+        aiCharacterId = 'GM';
+      }
+    } else {
+      const lastMessage = updatedMessages.length > 1 ? updatedMessages[updatedMessages.length - 2] : null;
+      const lastSpeaker = lastMessage?.speaker;
+
+      if (lastSpeaker && lastSpeaker !== 'Player' && lastSpeaker !== 'Game Master') {
+        const respondingChar = characters.find(char => char.name === lastSpeaker);
+        if (respondingChar) {
+          aiCharacterId = respondingChar.id;
+          aiResponder = lastSpeaker;
         } else {
-          // No characters available, use GM
           useGmMode = true;
           aiResponder = 'Game Master';
           aiCharacterId = 'GM';
         }
+      } else if (characters.length > 0) {
+        // Find a character relevant to the message content
+        const userMessageLower = input.toLowerCase();
+        const relevantChar = characters.find(char => {
+          const traits = (char.traits || '').toLowerCase();
+          const background = (char.background || '').toLowerCase();
+          return (
+            userMessageLower.includes(char.name.toLowerCase()) ||
+            traits.includes('talkative') ||
+            background.includes('knowledge') ||
+            background.includes('leader')
+          );
+        }) || characters[Math.floor(Math.random() * characters.length)]; // Fallback to random
+        aiCharacterId = relevantChar.id;
+        aiResponder = relevantChar.name;
+      } else {
+        useGmMode = true;
+        aiResponder = 'Game Master';
+        aiCharacterId = 'GM';
       }
-  
-      // Ensure we have the latest enriched context
-      const campaignContext = {
-        name: campaign.name,
-        description: campaign.description || 'A fantasy campaign',
-        currentScene: campaign.scenes?.[campaign.currentSceneIndex || 0] || null,
-      };
-      
-      // Get fresh enriched context with memories
-      const enrichedContext = await campaignMemoryManager.enrichCampaignContext(
-        campaignId, 
-        campaign.context || campaignContext
-      );
-      
-      const gmPrompt = campaign.gmPrompt || 'You are a Game Master narrating a fantasy campaign.';
-  
-      console.log('Sending request to AI as:', {
+    }
+
+    const campaignContext = {
+      name: campaign.name,
+      description: campaign.description || 'A fantasy campaign',
+      currentScene: campaign.scenes?.[campaign.currentSceneIndex || 0] || null,
+    };
+
+    const enrichedContext = await campaignMemoryManager.enrichCampaignContext(campaignId, campaign.context || campaignContext);
+    const gmPrompt = campaign.gmPrompt || 'You are a Game Master narrating a fantasy campaign.';
+
+    console.log('Sending request to AI as:', {
+      aiCharacterId,
+      aiResponder,
+      useGmMode,
+      campaignId,
+      rpMode
+    });
+
+    const response = await enhanceCharacterAPI(
+      aiCharacterId,
+      input,
+      updatedMessages,
+      {
+        temperature: 0.7,
+        campaignId: campaignId,
+        enrichedContext: enrichedContext,
+        worldContext: worldContext,
+        isGameMaster: useGmMode,
+        gmPrompt: gmPrompt,
+        rpMode: rpMode,
+      }
+    );
+
+    const aiMessage = {
+      sender: 'character',
+      text: response.response,
+      timestamp: new Date().toISOString(),
+      speaker: aiResponder,
+      memoryId: null,
+    };
+
+    const finalMessages = [...updatedMessages, aiMessage];
+    setMessages(finalMessages);
+
+    try {
+      await campaignMemoryManager.processCampaignInteraction(
+        campaignId,
         aiCharacterId,
         aiResponder,
-        useGmMode,
-        campaignId,
-        rpMode
-      });
-  
-      // Pass all relevant context to the API
-      const response = await enhanceCharacterAPI(
-        aiCharacterId, // Character ID or 'GM'
-        input, // User's message
-        updatedMessages, // Full conversation history
-        {
-          temperature: 0.7,
-          campaignId: campaignId,     
-          enrichedContext: enrichedContext, 
-          worldContext: worldContext,   
-          isGameMaster: useGmMode, // This is the key flag for GM mode
-          gmPrompt: gmPrompt,
-          rpMode: rpMode,        
-        }
+        aiMessage.text,
+        campaign.participantIds || []
       );
-  
-      const aiMessage = {
-        sender: 'character',
-        text: response.response,
-        timestamp: new Date().toISOString(),
-        speaker: aiResponder,
-        memoryId: null, // Placeholder for memory ID (for future memory-wiping feature)
-      };
-      
-      const finalMessages = [...updatedMessages, aiMessage];
-      setMessages(finalMessages);
-  
-      // Process this interaction in the memory system
-      try {
-        await campaignMemoryManager.processCampaignInteraction(
-          campaignId,
-          aiCharacterId, // Use the character ID or 'GM'
-          aiResponder,
-          aiMessage.text,
-          campaign.participantIds || []
-        );
-      } catch (memoryError) {
-        console.error('Error processing memory:', memoryError);
-      }
-  
-      // Save the updated conversation
-      await updateCampaignSession(campaignId, finalMessages);
-    } catch (err) {
-      console.error('Failed to send message:', err);
-      setError('Failed to send message: ' + err.message);
-    } finally {
-      setIsSendingMessage(false);
+    } catch (memoryError) {
+      console.error('Error processing memory:', memoryError);
     }
-  };
 
+    await updateCampaignSession(campaignId, finalMessages);
+  } catch (err) {
+    console.error('Failed to send message:', err);
+    setError(`Failed to send message: ${err.message}`);
+  } finally {
+    setIsSendingMessage(false);
+  }
+};
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
