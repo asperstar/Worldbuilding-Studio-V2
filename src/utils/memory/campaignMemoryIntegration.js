@@ -171,66 +171,51 @@ export const extractCampaignInsights = async (
       );
     }
     
-    // Analyze for campaign-specific insights like quest progress or world changes
-    // Use either Ollama locally or Together AI in production
-    const aiService = process.env.NODE_ENV === 'production' 
-      ? 'together-ai' 
-      : 'ollama';
-
-    let campaignInsight = null;
-    
-    if (aiService === 'ollama') {
-      // Local development with Ollama
+    // Use Grok for campaign-specific insights instead of Ollama
+    // Define a function to generate insights using fetch to your Grok API endpoint
+    const generateInsightWithGrok = async (prompt) => {
       try {
-        const ollamaBaseUrl = process.env.REACT_APP_OLLAMA_BASE_URL || 'http://localhost:11434';
+        // Modify this to match your Grok API endpoint
+        const grokApiUrl = process.env.REACT_APP_GROK_API_URL || 'http://localhost:3000/api/generate';
         
-        const response = await fetch(`${ollamaBaseUrl}/api/generate`, {
+        const response = await fetch(grokApiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: 'mistral',
-            prompt: `Analyze this campaign conversation for campaign-specific insights:
+            prompt: prompt,
+            max_tokens: 100,
+            temperature: 0.2
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Grok API error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        return data.text || data.output || data.response || '';
+      } catch (error) {
+        console.error('Error using Grok API:', error);
+        return null;
+      }
+    };
+
+    let campaignInsight = null;
+    
+    // Generate insight with Grok
+    const insightPrompt = `Analyze this campaign conversation for campaign-specific insights:
 
 ${conversation.map(msg => `${msg.sender === 'user' ? 'Player' : characterName}: ${msg.text}`).join('\n')}
 
 Identify ONE important campaign insight like quest progress, world changes, or important character relationships.
-Format: [CAMPAIGN_INSIGHT]: Your insight here`,
-            options: { temperature: 0.2, num_predict: 100 }
-          })
-        });
-        
-        const rawText = await response.text();
-        let data;
-        
-        try {
-          data = JSON.parse(rawText);
-        } catch (parseError) {
-          console.error('JSON parsing error in campaign insight extraction:', parseError);
-          // Use regex to extract response if JSON parsing fails
-          const responseMatch = rawText.match(/"response"\s*:\s*"([^"]*)"/);
-          if (responseMatch && responseMatch[1]) {
-            data = { response: responseMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') };
-          }
-        }
-        
-        if (data?.response) {
-          const insightMatch = data.response.match(/\[CAMPAIGN_INSIGHT\]:\s*(.*?)(\n|$)/i);
-          if (insightMatch && insightMatch[1]) {
-            campaignInsight = insightMatch[1].trim();
-          }
-        }
-      } catch (error) {
-        console.error('Error using Ollama for campaign insight extraction:', error);
-      }
-    } else {
-      // Production with Together AI
-      try {
-        // This would be implemented with a fetch to Together AI's API
-        // For now, just log that we would use Together AI in production
-        console.log('Would use Together AI for campaign insight extraction in production');
-        // Implementation would be similar to the Ollama version but with Together AI endpoints
-      } catch (error) {
-        console.error('Error using Together AI for campaign insight extraction:', error);
+Format: [CAMPAIGN_INSIGHT]: Your insight here`;
+    
+    const grokResponse = await generateInsightWithGrok(insightPrompt);
+    
+    if (grokResponse) {
+      const insightMatch = grokResponse.match(/\[CAMPAIGN_INSIGHT\]:\s*(.*?)(\n|$)/i);
+      if (insightMatch && insightMatch[1]) {
+        campaignInsight = insightMatch[1].trim();
       }
     }
     

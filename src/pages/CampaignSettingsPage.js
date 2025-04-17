@@ -11,7 +11,7 @@ function CampaignSettingsPage() {
   const [characters, setCharacters] = useState([]);
   const [gmType, setGmType] = useState('USER');
   const [gmPrompt, setGmPrompt] = useState('');
-  const [aiProvider, setAiProvider] = useState(aiConfig.currentProvider.key);
+  const [aiProvider, setAiProvider] = useState('grok'); // Default to grok
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -33,7 +33,9 @@ function CampaignSettingsPage() {
         setCampaign(loadedCampaign);
         setGmType(loadedCampaign.gmType || 'USER');
         setGmPrompt(loadedCampaign.gmPrompt || '');
-        setAiProvider(loadedCampaign.aiProvider || aiConfig.currentProvider.key);
+        
+        // Set AI provider with fallback to grok
+        setAiProvider(loadedCampaign.aiProvider || 'grok');
 
         const allCharacters = await getCharacters(null);
         setCharacters(allCharacters || []);
@@ -72,6 +74,28 @@ function CampaignSettingsPage() {
       }
     } catch (err) {
       setError('Failed to save campaign settings: ' + err.message);
+    }
+  };
+
+  // Define the available AI providers
+  const availableProviders = {
+    grok: {
+      key: 'grok',
+      name: 'Grok AI',
+      description: 'Local AI service using Grok. Best for privacy and offline use.',
+      defaultModel: 'grok-1'
+    },
+    ollama: {
+      key: 'ollama',
+      name: 'Ollama (Legacy)',
+      description: 'Local AI service using Ollama. Currently not in use.',
+      defaultModel: 'mistral'
+    },
+    together: {
+      key: 'together',
+      name: 'Together AI',
+      description: 'Cloud-based AI service with powerful models. Requires API key.',
+      defaultModel: 'mixtral-8x7b'
     }
   };
 
@@ -125,29 +149,35 @@ function CampaignSettingsPage() {
           </div>
         )}
         
-        {/* New AI Provider Setting */}
+        {/* Updated AI Provider Setting */}
         <div className="ai-provider-section">
           <h2>AI Provider Settings</h2>
           <div>
             <label>AI Provider:</label>
             <select value={aiProvider} onChange={(e) => setAiProvider(e.target.value)}>
-              {Object.values(aiConfig.AI_PROVIDERS).map(provider => (
-                <option key={provider} value={provider}>
-                  {aiConfig.PROVIDER_CONFIGS[provider].name}
+              {Object.values(availableProviders).map(provider => (
+                <option key={provider.key} value={provider.key}>
+                  {provider.name}
                 </option>
               ))}
             </select>
           </div>
           
-          {aiProvider === aiConfig.AI_PROVIDERS.TOGETHER && !aiConfig.isApiKeyConfigured() && (
+          {aiProvider === 'together' && (
             <div className="api-key-warning">
-              <p>⚠️ Together AI API key not configured. Please add your API key to the .env file.</p>
+              <p>⚠️ Together AI requires an API key in the .env file.</p>
+            </div>
+          )}
+          
+          {aiProvider === 'ollama' && (
+            <div className="api-key-warning">
+              <p>⚠️ Ollama is currently disabled. Please use Grok AI instead.</p>
             </div>
           )}
           
           <div className="provider-info">
-            <p>{aiConfig.PROVIDER_CONFIGS[aiProvider].description}</p>
-            <p><strong>Default Model:</strong> {aiConfig.PROVIDER_CONFIGS[aiProvider].defaultModel}</p>
+            <p>{availableProviders[aiProvider]?.description || 'AI Provider for character interactions'}</p>
+            <p><strong>Default Model:</strong> {availableProviders[aiProvider]?.defaultModel || 'unknown'}</p>
           </div>
         </div>
       </div>

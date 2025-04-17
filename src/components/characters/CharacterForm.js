@@ -3,7 +3,7 @@ import { analyzeImage } from '../../utils/visionAPI';
 import { storage } from '../../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-function CharacterForm({ onSave, onCancel, initialCharacter, isEditing, isSubmitting = false, onChange }) {
+function CharacterForm({ onSave, onCancel, initialCharacter, isEditing, isSubmitting = false, onChange, currentUser }) {
   const [character, setCharacter] = useState({
     name: '',
     personality: '',
@@ -117,7 +117,7 @@ function CharacterForm({ onSave, onCancel, initialCharacter, isEditing, isSubmit
       const previewUrl = URL.createObjectURL(file);
       setImagePreview(previewUrl);
       
-      // Store the file reference for later upload in handleSubmit
+      // Store the file reference for later upload
       setCharacter(prev => ({
         ...prev,
         imageFile: file,
@@ -168,38 +168,50 @@ function CharacterForm({ onSave, onCancel, initialCharacter, isEditing, isSubmit
     }
   };
 
-  const handleDocumentUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+ // Updated handleDocumentUpload function to fix document uploads
+const handleDocumentUpload = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
 
-    try {
-      if (file.size > 1024 * 1024) {
-        throw new Error("Please choose a document smaller than 1MB");
-      }
-
-      const storageRef = ref(storage, `documents/${file.name}_${Date.now()}`);
-      await uploadBytes(storageRef, file);
-      const documentUrl = await getDownloadURL(storageRef);
-
-      setCharacter(prev => {
-        const updated = {
-          ...prev,
-          documentUrl,
-          documentFile: file
-        };
-        if (onChange) {
-          onChange({ target: { name: 'documentUrl', value: documentUrl } });
-        }
-        return updated;
-      });
-    } catch (error) {
-      console.error("Error uploading document:", error);
-      alert("Could not upload the document file. Please try a different file.");
-      if (documentInputRef.current) {
-        documentInputRef.current.value = '';
-      }
+  try {
+    if (file.size > 1024 * 1024) {
+      throw new Error("Please choose a document smaller than 1MB");
     }
-  };
+
+    // Get userId from props
+    if (!currentUser || !currentUser.uid) {
+      throw new Error("User not authenticated");
+    }
+
+    // Create proper storage reference with userId in path
+    const userId = currentUser.uid;
+    const storageRef = ref(storage, `users/${userId}/documents/${file.name}_${Date.now()}`);
+    
+    // Use await to ensure the upload completes
+    await uploadBytes(storageRef, file);
+    
+    // Get the download URL after successful upload
+    const documentUrl = await getDownloadURL(storageRef);
+
+    setCharacter(prev => {
+      const updated = {
+        ...prev,
+        documentUrl,
+        documentFile: file
+      };
+      if (onChange) {
+        onChange({ target: { name: 'documentUrl', value: documentUrl } });
+      }
+      return updated;
+    });
+  } catch (error) {
+    console.error("Error uploading document:", error);
+    alert("Could not upload the document file: " + error.message);
+    if (documentInputRef.current) {
+      documentInputRef.current.value = '';
+    }
+  }
+};
 
   const generatePlaceholderImage = () => {
     try {

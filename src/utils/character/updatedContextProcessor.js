@@ -23,9 +23,23 @@ export const enhanceCharacterAPI = async (characterId, userInput, previousMessag
       rpMode = 'lax',
     } = options;
 
-    const character = await getCharacterById(characterId);
-    if (!character) {
-      throw new Error(`Character with ID ${characterId} not found`);
+    // Handle Game Master special case
+    let character;
+    if (characterId === 'GM' || isGameMaster) {
+      character = {
+        id: 'GM',
+        name: 'Game Master',
+        personality: 'An engaging and fair Game Master who narrates the campaign, describes scenes, controls NPCs, and guides the story.',
+        background: 'As the Game Master, you manage the game world and create an immersive experience for the players.',
+        appearance: 'The omniscient narrator and guide of the campaign.',
+        traits: 'Fair, creative, descriptive, adaptable',
+        isGameMaster: true,
+      };
+    } else {
+      character = await getCharacterById(characterId);
+      if (!character) {
+        throw new Error(`Character with ID ${characterId} not found`);
+      }
     }
 
     let memories = '';
@@ -51,7 +65,7 @@ export const enhanceCharacterAPI = async (characterId, userInput, previousMessag
     let contextualInfo = '';
     let characterInfo = '';
 
-    if (isGameMaster) {
+    if (character.isGameMaster || isGameMaster) {
       characterInfo = gmPrompt;
 
       if (worldContext) {
@@ -100,20 +114,24 @@ export const enhanceCharacterAPI = async (characterId, userInput, previousMessag
 
     console.log('Sending request to /api/chat:', { messages, character: character.name, context });
 
+    // Use the configured API URL from environment or fallback to relative path
     const API_URL = process.env.REACT_APP_API_URL || '';
-const response = await fetch(`${API_URL}/api/chat`, {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    messages,
-    character: character.name,
-    context,
-  }),
-});
+    const response = await fetch(`${API_URL}/api/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messages,
+        character: character.name,
+        context,
+        isGameMaster: character.isGameMaster || isGameMaster,
+      }),
+    });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('API error response:', errorText);
       throw new Error(`API error: ${response.status} ${response.statusText}`);
     }
 
@@ -136,6 +154,7 @@ const response = await fetch(`${API_URL}/api/chat`, {
 export async function getCharacterById(characterId) {
   console.log(`Fetching character with ID: ${characterId}`);
 
+  // Special case for Game Master
   if (characterId === 'GM') {
     console.log('Creating special GM character');
     return {
@@ -149,41 +168,57 @@ export async function getCharacterById(characterId) {
     };
   }
 
-  const db = getFirestore();
-  const userId = auth.currentUser?.uid;
-  if (!userId) throw new Error('User not authenticated');
-
-  const idVariations = [
-    characterId,
-    `char_${characterId}`,
-    characterId.startsWith('char_') ? characterId.replace('char_', '') : `char_${characterId}`,
-    characterId.substring(5),
-  ];
-
-  let character = null;
-  for (const idToTry of idVariations) {
-    console.log(`Trying ID variation: ${idToTry}`);
-    const docRef = doc(db, `users/${userId}/characters`, idToTry);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      character = { id: docSnap.id, ...docSnap.data() };
-      console.log(`Found character using ID format: ${idToTry}`);
-      return character;
-    }
+  // Handle null or undefined characterId
+  if (!characterId) {
+    console.error('Character ID is null or undefined');
+    return null;
   }
 
-  console.log(`Falling back to matching by name for ID: ${characterId}`);
-  const q = query(collection(db, `users/${userId}/characters`), where('name', '==', characterId));
-  const querySnapshot = await getDocs(q);
-  querySnapshot.forEach((doc) => {
-    if (doc.exists()) {
-      character = { id: doc.id, ...doc.data() };
-      console.log(`Found character by name: ${characterId}, ID: ${doc.id}`);
+  try {
+    const db = getFirestore();
+    const userId = auth.currentUser?.uid;
+    if (!userId) throw new Error('User not authenticated');
+
+    const idVariations = [
+      characterId,
+      `char_${characterId}`,
+      characterId.startsWith('char_') ? characterId.replace('char_', '') : `char_${characterId}`,
+      characterId.substring(5),
+    ];
+
+    let character = null;
+    for (const idToTry of idVariations) {
+      console.log(`Trying ID variation: ${idToTry}`);
+      try {
+        const docRef = doc(db, `users/${userId}/characters`, idToTry);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          character = { id: docSnap.id, ...docSnap.data() };
+          console.log(`Found character using ID format: ${idToTry}`);
+          return character;
+        }
+      } catch (error) {
+        console.warn(`Error fetching character with ID ${idToTry}:`, error);
+      }
     }
-  });
 
-  if (character) return character;
+    console.log(`Falling back to matching by name for ID: ${characterId}`);
+    try {
+      const q = query(collection(db, `users/${userId}/characters`), where('name', '==', characterId));
+      const querySnapshot = await getDocs(q);
+      querySnapshot.forEach((doc) => {
+        if (doc.exists()) {
+          character = { id: doc.id, ...doc.data() };
+          console.log(`Found character by name: ${characterId}, ID: ${doc.id}`);
+        }
+      });
+    } catch (error) {
+      console.warn(`Error searching for character by name ${characterId}:`, error);
+    }
 
-  console.log(`Character not found with any ID variation. Tried: ${idVariations.join(', ')}`);
-  return null;
+    return character;
+  } catch (error) {
+    console.error(`Error in getCharacterById for ID ${characterId}:`, error);
+    return null;
+  }
 }

@@ -83,7 +83,8 @@ function CampaignSessionPage() {
   const handleSendMessage = async () => {
     if (!input.trim() || !campaign) return;
   
-    const isGM = campaign.gmType === 'USER' && speakingAs === 'GM';
+    // Determine if user is speaking as the Game Master
+    const isGM = speakingAs === 'GM';
     const userMessage = {
       sender: 'user',
       text: input,
@@ -96,7 +97,8 @@ function CampaignSessionPage() {
     setIsSendingMessage(true);
     setError(null);
   
-    if (isGM) {
+    // If user is the GM and campaign is user-GM mode, just save the message without AI response
+    if (isGM && campaign.gmType === 'USER') {
       await updateCampaignSession(campaignId, updatedMessages);
       setIsSendingMessage(false);
       return;
@@ -104,37 +106,65 @@ function CampaignSessionPage() {
   
     try {
       let aiResponder = 'Game Master';
-      let aiCharacter = null;
+      let aiCharacterId = null;
       let useGmMode = false;
   
+      // Configure AI response based on the context
       if (campaign.gmType === 'AI') {
+        // If AI is the GM, always use GM mode
         useGmMode = true;
         aiResponder = 'Game Master';
-      } else {
-        if (speakingAs !== 'PLAYER') {
-          const speakingAsCharacter = characters.find(char => char.id === speakingAs);
-          const otherCharacters = characters.filter(char => char.id !== speakingAs);
-          
-          if (otherCharacters.length > 0) {
-            aiCharacter = otherCharacters[0];
-            aiResponder = aiCharacter.name;
-          } else {
-            aiResponder = 'Narrator';
-          }
+        aiCharacterId = 'GM'; // Use special GM character ID
+      } else if (isGM) {
+        // User is GM but we still need an AI response for some reason
+        useGmMode = true;
+        aiResponder = 'Game Master';
+        aiCharacterId = 'GM';
+      } else if (speakingAs !== 'PLAYER') {
+        // User speaking as a specific character
+        const speakingAsCharacter = characters.find(char => char.id === speakingAs);
+        const otherCharacters = characters.filter(char => char.id !== speakingAs);
+        
+        if (otherCharacters.length > 0) {
+          // If there are other characters, pick one to respond
+          const respondingChar = otherCharacters[0];
+          aiCharacterId = respondingChar.id;
+          aiResponder = respondingChar.name;
         } else {
-          // Decision logic for who should respond
-          const lastMessage = updatedMessages.length > 1 ? updatedMessages[updatedMessages.length - 2] : null;
-          const lastSpeaker = lastMessage?.speaker;
-          
-          if (lastSpeaker && lastSpeaker !== 'Player' && lastSpeaker !== 'Game Master') {
-            aiCharacter = characters.find(char => char.name === lastSpeaker);
+          // No other characters, use GM/Narrator
+          useGmMode = true;
+          aiResponder = 'Narrator';
+          aiCharacterId = 'GM';
+        }
+      } else {
+        // Player is speaking as themselves
+        // Decision logic for who should respond based on conversation flow
+        const lastMessage = updatedMessages.length > 1 ? updatedMessages[updatedMessages.length - 2] : null;
+        const lastSpeaker = lastMessage?.speaker;
+        
+        if (lastSpeaker && lastSpeaker !== 'Player' && lastSpeaker !== 'Game Master') {
+          // If the last speaker was a character, have them respond
+          const respondingChar = characters.find(char => char.name === lastSpeaker);
+          if (respondingChar) {
+            aiCharacterId = respondingChar.id;
             aiResponder = lastSpeaker;
-          } else if (characters.length > 0) {
-            // Choose a random character if no obvious choice
-            const randomIndex = Math.floor(Math.random() * characters.length);
-            aiCharacter = characters[randomIndex];
-            aiResponder = aiCharacter.name;
+          } else {
+            // Character not found, fall back to GM
+            useGmMode = true;
+            aiResponder = 'Game Master';
+            aiCharacterId = 'GM';
           }
+        } else if (characters.length > 0) {
+          // Choose a random character
+          const randomIndex = Math.floor(Math.random() * characters.length);
+          const randomChar = characters[randomIndex];
+          aiCharacterId = randomChar.id;
+          aiResponder = randomChar.name;
+        } else {
+          // No characters available, use GM
+          useGmMode = true;
+          aiResponder = 'Game Master';
+          aiCharacterId = 'GM';
         }
       }
   
@@ -153,19 +183,27 @@ function CampaignSessionPage() {
       
       const gmPrompt = campaign.gmPrompt || 'You are a Game Master narrating a fantasy campaign.';
   
+      console.log('Sending request to AI as:', {
+        aiCharacterId,
+        aiResponder,
+        useGmMode,
+        campaignId,
+        rpMode
+      });
+  
       // Pass all relevant context to the API
       const response = await enhanceCharacterAPI(
-        useGmMode ? 'GM' : aiCharacter?.id || 'narrator',
-        input,
-        updatedMessages,  // Use the updated message array that includes the user's message
+        aiCharacterId, // Character ID or 'GM'
+        input, // User's message
+        updatedMessages, // Full conversation history
         {
           temperature: 0.7,
-          campaignId,     // Pass campaignId for memory retrieval
-          enrichedContext, // Pass the enriched context
-          worldContext,   // Pass the world context
-          isGameMaster: useGmMode,
-          gmPrompt,
-          rpMode,        // Pass the RP mode
+          campaignId: campaignId,     
+          enrichedContext: enrichedContext, 
+          worldContext: worldContext,   
+          isGameMaster: useGmMode, // This is the key flag for GM mode
+          gmPrompt: gmPrompt,
+          rpMode: rpMode,        
         }
       );
   
@@ -181,18 +219,16 @@ function CampaignSessionPage() {
       setMessages(finalMessages);
   
       // Process this interaction in the memory system
-      if (aiCharacter || useGmMode) {
-        try {
-          await campaignMemoryManager.processCampaignInteraction(
-            campaignId,
-            useGmMode ? 'GM' : aiCharacter.id,
-            aiResponder,
-            aiMessage.text,
-            campaign.participantIds || []
-          );
-        } catch (memoryError) {
-          console.error('Error processing memory:', memoryError);
-        }
+      try {
+        await campaignMemoryManager.processCampaignInteraction(
+          campaignId,
+          aiCharacterId, // Use the character ID or 'GM'
+          aiResponder,
+          aiMessage.text,
+          campaign.participantIds || []
+        );
+      } catch (memoryError) {
+        console.error('Error processing memory:', memoryError);
       }
   
       // Save the updated conversation
@@ -204,6 +240,7 @@ function CampaignSessionPage() {
       setIsSendingMessage(false);
     }
   };
+
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -215,7 +252,7 @@ function CampaignSessionPage() {
     const updatedMessages = [...messages];
     updatedMessages[index] = { ...updatedMessages[index], text: newText, edited: true };
     setMessages(updatedMessages);
-    updateCampaignSession(campaignId, { messages: updatedMessages });
+    updateCampaignSession(campaignId, updatedMessages);
   };
 
   if (isLoading) {
@@ -266,7 +303,7 @@ function CampaignSessionPage() {
           <label>Speaking as: </label>
           <select value={speakingAs} onChange={(e) => setSpeakingAs(e.target.value)}>
             <option value="PLAYER">Player</option>
-            {campaign.gmType === 'USER' && <option value="GM">Game Master</option>}
+            <option value="GM">Game Master</option>
             {characters.map((char) => (
               <option key={char.id} value={char.id}>{char.name}</option>
             ))}
@@ -305,7 +342,11 @@ function CampaignSessionPage() {
                 {campaign.gmType === 'AI' ? 'Game Master' : characters.length > 0 ? characters[0].name : 'Narrator'}
               </strong>{' '}
               <span>{new Date().toLocaleTimeString()}</span>
-              <p>Generating response...</p>
+              <p className="generating-indicator">
+                <span className="dot-1">.</span>
+                <span className="dot-2">.</span>
+                <span className="dot-3">.</span>
+              </p>
             </div>
           )}
           <div ref={messagesEndRef} />
@@ -319,7 +360,7 @@ function CampaignSessionPage() {
             disabled={isSendingMessage}
           />
           <button onClick={handleSendMessage} disabled={isSendingMessage}>
-            Send
+            {isSendingMessage ? 'Sending...' : 'Send'}
           </button>
         </div>
       </div>
