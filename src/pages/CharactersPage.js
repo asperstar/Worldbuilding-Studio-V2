@@ -8,6 +8,8 @@ import { perf } from '../firebase';
 import { useStorage } from '../contexts/StorageContext';
 import debounce from 'lodash/debounce';
 import { useNavigate } from 'react-router-dom';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../firebase';
 
 // Create debounced save function
 const debouncedSaveCharacter = debounce(async (characterData, userId) => {
