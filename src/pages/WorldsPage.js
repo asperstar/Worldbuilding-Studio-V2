@@ -139,45 +139,59 @@ function WorldsPage() {
   }, [searchQuery, worlds]);
 
   const saveWorld = async (newWorld) => {
-    if (!currentUser || !currentUser.uid) {
-      setError('User not authenticated. Please log in.');
-      return;
-    }
-
     try {
-      const imageUrl = newWorld.imageUrl || '';
+      setIsLoading(true);
+      
+      // Process image upload if there's a file
+      let imageUrl = newWorld.imageUrl || '';
+      if (newWorld.imageFile) {
+        try {
+          const userId = currentUser.uid;
+          const imageId = Date.now().toString();
+          const storageRef = ref(storage, `users/${userId}/worlds/${imageId}`);
+          await uploadBytes(storageRef, newWorld.imageFile);
+          imageUrl = await getDownloadURL(storageRef);
+        } catch (imageError) {
+          console.error("Error uploading world image:", imageError);
+          // Continue saving without the image
+        }
+      }
       
       if (editingWorld) {
         const updatedWorlds = worlds.map(world => 
           world.id === editingWorld.id 
-            ? cleanForFirestore({ 
+            ? { 
                 ...newWorld, 
                 id: world.id, 
-                imageUrl, 
+                imageUrl, // Use the uploaded URL
+                imageFile: null, // Don't store the file in Firestore
                 created: world.created, 
                 updated: new Date().toISOString(),
                 userId: currentUser.uid
-              })
+              }
             : world
         );
         setWorlds(updatedWorlds);
         setEditingWorld(null);
       } else {
-        const newWorldWithId = cleanForFirestore({ 
+        const newWorldWithId = { 
           ...newWorld, 
-          imageUrl,
+          imageUrl, // Use the uploaded URL
+          imageFile: null, // Don't store the file in Firestore
           id: Date.now(),
           created: new Date().toISOString(),
           environmentIds: newWorld.environmentIds || [],
           characterIds: newWorld.characterIds || [],
           campaignIds: [],
           userId: currentUser.uid
-        });
+        };
         setWorlds(prevWorlds => [...prevWorlds, newWorldWithId]);
       }
     } catch (error) {
-      console.error("Error saving world:", { message: error.message, code: error.code, stack: error.stack });
+      console.error("Error saving world:", error);
       setError(`Failed to save world: ${error.message}`);
+    } finally {
+      setIsLoading(false);
     }
   };
   

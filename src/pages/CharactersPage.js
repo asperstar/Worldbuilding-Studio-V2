@@ -9,6 +9,17 @@ import { useStorage } from '../contexts/StorageContext';
 import debounce from 'lodash/debounce';
 import { useNavigate } from 'react-router-dom';
 
+// Create debounced save function
+const debouncedSaveCharacter = debounce(async (characterData, userId) => {
+  try {
+    await saveCharacter(characterData, userId);
+    return true;
+  } catch (error) {
+    console.error("Error in debounced save:", error);
+    return false;
+  }
+}, 300); // 300ms debounce
+
 function CharactersPage() {
   const navigate = useNavigate();
   const { currentUser, getAllCharacters, testStorage } = useStorage();
@@ -72,8 +83,20 @@ function CharactersPage() {
         setCharacters(newCharacters);
         setFilteredCharacters(newCharacters);
       } else {
-        setCharacters(prev => [...prev, ...newCharacters]);
-        setFilteredCharacters(prev => [...prev, ...newCharacters]);
+        setCharacters(prev => {
+          const combined = [...prev, ...newCharacters];
+          const uniqueCharacters = Array.from(
+            new Map(combined.map(char => [char.id, char])).values()
+          );
+          return uniqueCharacters;
+        });
+        setFilteredCharacters(prev => {
+          const combined = [...prev, ...newCharacters];
+          const uniqueCharacters = Array.from(
+            new Map(combined.map(char => [char.id, char])).values()
+          );
+          return uniqueCharacters;
+        });
       }
 
       setHasMore(endIndex < allCharacters.length);
@@ -149,66 +172,89 @@ function CharactersPage() {
   };
 
   // src/pages/CharactersPage.js
-const handleSaveCharacter = async (newCharacter) => {
-  try {
-    setIsLoading(true);
-    setSaveError(null);
-    let updatedCharacter;
-    if (editingCharacter) {
+  const handleSaveCharacter = async (newCharacter) => {
+    try {
+      setIsLoading(true);
+      setSaveError(null);
+      
+      // Check if character already exists with similar data to prevent duplicates
+      if (!editingCharacter && characters.some(c => c.name === newCharacter.name)) {
+        setSaveError(`A character named "${newCharacter.name}" already exists. Please use a different name.`);
+        setIsLoading(false);
+        return;
+      }
+      
+      // Process image if present
+      let imageUrl = newCharacter.imageUrl || '';
+      if (newCharacter.imageFile) {
+        try {
+          const userId = currentUser.uid;
+          const imageId = Date.now().toString();
+          const storageRef = ref(storage, `users/${userId}/characters/${imageId}`);
+          await uploadBytes(storageRef, newCharacter.imageFile);
+          imageUrl = await getDownloadURL(storageRef);
+        } catch (imageError) {
+          console.error("Error uploading image:", imageError);
+          setSaveError("Image upload failed, but character will be saved without image");
+        }
+      }
+  
+      let updatedCharacter;
+      const characterId = editingCharacter ? 
+        editingCharacter.id.toString() : 
+        `char_${Date.now()}`;
+        
       updatedCharacter = {
         ...newCharacter,
-        id: editingCharacter.id.toString(),
-        imageFile: newCharacter.imageFile, // Include imageFile
-        imageUrl: newCharacter.imageUrl || editingCharacter.imageUrl || '',
-        created: editingCharacter.created,
+        id: characterId,
+        imageUrl, // Use the uploaded URL
+        imageFile: null, // Don't store file in Firestore
+        created: editingCharacter ? editingCharacter.created : new Date().toISOString(),
         updated: new Date().toISOString(),
         userId: currentUser.uid,
         isDraft: false,
       };
-    } else {
-      updatedCharacter = {
-        ...newCharacter,
-        id: `char_${Date.now()}`,
-        imageFile: newCharacter.imageFile, // Include imageFile
-        imageUrl: newCharacter.imageUrl || '',
-        created: new Date().toISOString(),
-        updated: new Date().toISOString(),
-        userId: currentUser.uid,
-        isDraft: false,
-      };
-    }
-
-    await saveCharacter(updatedCharacter, currentUser.uid);
-    if (editingCharacter) {
-      setCharacters(prevChars =>
-        prevChars.map(char => (char.id === editingCharacter.id ? updatedCharacter : char))
-      );
-    } else {
-      setCharacters(prevChars => [...prevChars, updatedCharacter]);
-    }
-    setEditingCharacter(null);
-    setDraftCharacter(null);
-    setHasUnsavedChanges(false);
-    setFormData({
-      name: '',
-      traits: '',
-      personality: '',
-      background: '',
-      imageUrl: '',
-      imageFile: null, // Reset imageFile
-    });
-  } catch (error) {
-    console.error("Error saving character:", error);
-    if (error.message.includes('User not authenticated')) {
-      setError('Session expired. Please log in again.');
-      navigate('/login');
-    } else {
+  
+      // Save character
+      const saveResult = await debouncedSaveCharacter(updatedCharacter, currentUser.uid);
+      
+      if (saveResult) {
+        // Update UI state
+        if (editingCharacter) {
+          setCharacters(prevChars =>
+            prevChars.map(char => (char.id === editingCharacter.id ? updatedCharacter : char))
+          );
+        } else {
+          setCharacters(prevChars => {
+            // Ensure we're not adding a duplicate
+            if (prevChars.some(c => c.id === characterId)) {
+              return prevChars;
+            }
+            return [...prevChars, updatedCharacter];
+          });
+        }
+        
+        // Reset form state
+        setEditingCharacter(null);
+        setDraftCharacter(null);
+        setHasUnsavedChanges(false);
+        setFormData({
+          name: '',
+          traits: '',
+          personality: '',
+          background: '',
+          imageUrl: '',
+        });
+      }
+    } catch (error) {
+      console.error("Error saving character:", error);
       setSaveError(`Failed to save character: ${error.message}`);
+    } finally {
+      setIsLoading(false);
     }
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
+
+  
   const startEditing = (character) => {
     setEditingCharacter(character);
     setFormData({

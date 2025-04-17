@@ -105,36 +105,31 @@ function CharacterForm({ onSave, onCancel, initialCharacter, isEditing, isSubmit
     }
   };
 
-  const handleImageUpload = (e) => {
+  const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
+  
     setImageUploadError(null);
     setIsUploadingImage(true);
-
+  
     try {
-      if (file.size > 1024 * 1024) {
-        throw new Error("Please choose an image smaller than 1MB");
-      }
-
+      // Create URL for preview
       const previewUrl = URL.createObjectURL(file);
       setImagePreview(previewUrl);
+      
+      // Store the file reference for later upload in handleSubmit
       setCharacter(prev => ({
         ...prev,
         imageFile: file,
-        imageUrl: '',
         imageSource: 'upload'
       }));
-
+  
       if (onChange) {
         onChange({ target: { name: 'imageFile', value: file } });
       }
     } catch (error) {
       console.error("Image upload error:", error);
       setImageUploadError(error.message);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
     } finally {
       setIsUploadingImage(false);
     }
@@ -206,11 +201,11 @@ function CharacterForm({ onSave, onCancel, initialCharacter, isEditing, isSubmit
     }
   };
 
-  const generatePlaceholderImage = async () => {
+  const generatePlaceholderImage = () => {
     try {
       const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6'];
       const randomColor = colors[Math.floor(Math.random() * colors.length)];
-
+  
       const svgCode = `
       <svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
         <rect width="200" height="200" fill="${randomColor}" />
@@ -220,26 +215,23 @@ function CharacterForm({ onSave, onCancel, initialCharacter, isEditing, isSubmit
           ${character.name || 'Character'}
         </text>
       </svg>`;
-
+  
       const svgBlob = new Blob([svgCode], { type: 'image/svg+xml' });
-      const storageRef = ref(storage, `placeholders/placeholder_${Date.now()}.svg`);
-      await uploadBytes(storageRef, svgBlob);
-      const url = await getDownloadURL(storageRef);
-
+      const url = URL.createObjectURL(svgBlob);
+  
       setImagePreview(url);
       setCharacter(prev => {
         const updated = {
           ...prev,
-          imageUrl: url,
-          imageFile: null,
+          imageFile: svgBlob, // Store the blob as imageFile
           imageSource: 'generated'
         };
         if (onChange) {
-          onChange({ target: { name: 'imageUrl', value: url } });
+          onChange({ target: { name: 'imageFile', value: svgBlob } });
         }
         return updated;
       });
-
+  
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -318,7 +310,7 @@ function CharacterForm({ onSave, onCancel, initialCharacter, isEditing, isSubmit
 
   useEffect(() => {
     return () => {
-      if (imagePreview && (character.imageSource === 'upload')) {
+      if (imagePreview && (character.imageSource === 'upload' || character.imageSource === 'generated')) {
         URL.revokeObjectURL(imagePreview);
       }
     };

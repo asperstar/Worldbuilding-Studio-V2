@@ -100,17 +100,18 @@ export const enhanceCharacterAPI = async (characterId, userInput, previousMessag
 
     console.log('Sending request to /api/chat:', { messages, character: character.name, context });
 
-    const response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messages,
-        character: character.name,
-        context,
-      }),
-    });
+    const API_URL = process.env.REACT_APP_API_URL || '';
+const response = await fetch(`${API_URL}/api/chat`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    messages,
+    character: character.name,
+    context,
+  }),
+});
 
     if (!response.ok) {
       throw new Error(`API error: ${response.status} ${response.statusText}`);

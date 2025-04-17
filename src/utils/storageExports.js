@@ -15,68 +15,65 @@ const ensureAuthenticated = () => {
 
 // Utility function to deep clean an object for Firestore
 const deepCleanForFirestore = (obj, visited = new WeakSet()) => {
-  // Handle null or undefined
   if (obj === null || obj === undefined) {
     return null;
   }
-
-  // Handle non-objects (primitives)
+  if (obj instanceof File || obj instanceof Blob) {
+    console.log('Found File or Blob object, skipping:', obj);
+    return null; // Exclude File and Blob objects
+  }
   if (typeof obj !== 'object') {
     return obj;
   }
-
-  // Check for circular references
   if (visited.has(obj)) {
     console.warn('Circular reference detected in object, skipping:', obj);
     return null;
   }
-
-  // Add the current object to visited
   visited.add(obj);
-
-  // Handle arrays
   if (Array.isArray(obj)) {
     return obj
       .map(item => deepCleanForFirestore(item, visited))
       .filter(item => item !== null && item !== undefined);
   }
-
-  // Handle objects
   const cleaned = {};
   for (const key of Object.keys(obj)) {
     const value = obj[key];
-
-    // Skip userImpl objects
     if (value && typeof value === 'object' && value.constructor && value.constructor.name === 'userImpl') {
       console.log(`Found userImpl object in field '${key}':`, value);
       continue;
     }
-
-    // Skip 'user' field
     if (key === 'user') {
       console.log(`Removing 'user' field with value:`, value);
       continue;
     }
-
-    // Skip undefined values
     if (value === undefined) {
       console.log(`Removing undefined field '${key}'`);
       continue;
     }
-
-    // Recursively clean nested objects
     if (typeof value === 'object') {
       const cleanedValue = deepCleanForFirestore(value, visited);
       if (cleanedValue !== null && cleanedValue !== undefined) {
-        cleaned[key] = cleanedValue;
+        let hasUndefined = false;
+        if (cleanedValue && typeof cleanedValue === 'object') {
+          for (const nestedKey in cleanedValue) {
+            if (cleanedValue[nestedKey] === undefined) {
+              hasUndefined = true;
+              console.log(`Found undefined nested field '${key}.${nestedKey}'`);
+              break;
+            }
+          }
+        }
+        if (!hasUndefined) {
+          cleaned[key] = cleanedValue;
+        } else {
+          console.log(`Skipping field '${key}' due to nested undefined values`);
+        }
       }
     } else {
       cleaned[key] = value;
     }
   }
-
-  // Return the cleaned object (even if empty)
-  return cleaned;
+  return Object.keys(cleaned).length > 0 ? cleaned : null;
 };
 
 // World functions
@@ -307,28 +304,42 @@ export const loadCharacters = async (userId = null, projectId = null) => {
   }
 };
 
-export const saveCharacter = async (characterData, userId = null) => {
+export const saveCharacter = async (character, userId = null) => {
   try {
     const userIdToUse = userId || (await ensureAuthenticated());
-    let imageUrl = characterData.imageUrl || '';
-    if (characterData.imageFile) {
-      const storageRef = ref(storage, `users/${userIdToUse}/characters/${characterData.id || Date.now()}`);
-      await uploadBytes(storageRef, characterData.imageFile);
-      imageUrl = await getDownloadURL(storageRef);
+    
+    // Generate a consistent ID if one doesn't exist
+    const characterId = character.id || `char_${Date.now()}`;
+    character.id = characterId;
+    
+    // Handle image upload if needed
+    let imageUrl = character.imageUrl || '';
+    if (character.imageFile) {
+      try {
+        const storageRef = ref(storage, `users/${userIdToUse}/characters/${characterId}`);
+        await uploadBytes(storageRef, character.imageFile);
+        imageUrl = await getDownloadURL(storageRef);
+        character.imageUrl = imageUrl;
+      } catch (error) {
+        console.error("Error uploading character image:", error);
+        // Continue without the image
+      }
     }
-    const { imageFile, ...characterDataWithoutImage } = characterData;
-    const characterToSave = deepCleanForFirestore({
-      ...characterDataWithoutImage,
-      imageUrl,
+    
+    // Remove imageFile from what gets saved to Firestore
+    const { imageFile, ...characterToSave } = character;
+    
+    // Ensure the document exists (to prevent duplicates)
+    const characterRef = doc(db, `users/${userIdToUse}/characters`, characterId.toString());
+    
+    // Save to Firestore
+    await setDoc(characterRef, {
+      ...characterToSave,
       userId: userIdToUse,
-      created: characterData.created || new Date().toISOString(),
-      updated: new Date().toISOString(),
-    });
-    if (!characterToSave || !characterToSave.id) {
-      throw new Error('Failed to clean character data');
-    }
-    await setDoc(doc(db, `users/${userIdToUse}/characters`, characterToSave.id.toString()), characterToSave, { merge: true });
-    return { id: characterToSave.id, ...characterToSave };
+      updated: new Date().toISOString()
+    }, { merge: true });
+    
+    return true;
   } catch (error) {
     console.error('Error saving character:', error);
     throw error;
@@ -429,6 +440,8 @@ export const saveEnvironments = async (environments, userId = null) => {
   try {
     const userIdToUse = userId || (await ensureAuthenticated());
     for (const environment of environments) {
+      // Log the raw environment data
+      console.log('Saving environment with raw data:', environment);
       const environmentToSave = deepCleanForFirestore({
         ...environment,
         userId: userIdToUse,
@@ -439,6 +452,15 @@ export const saveEnvironments = async (environments, userId = null) => {
         console.error('Failed to clean environment data:', environment);
         continue;
       }
+      // Log the cleaned data before saving
+      console.log('Cleaned environment data to save:', environmentToSave);
+      // Check for undefined values in the cleaned data
+      const hasUndefined = JSON.stringify(environmentToSave, (key, value) => {
+        if (value === undefined) {
+          throw new Error(`Undefined value found in field '${key}'`);
+        }
+        return value;
+      });
       await setDoc(doc(db, `users/${userIdToUse}/environments`, environmentToSave.id.toString()), environmentToSave, { merge: true });
       console.log(`Environment ${environmentToSave.id} saved successfully`);
     }

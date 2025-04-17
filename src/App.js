@@ -33,7 +33,7 @@ import DocumentationPage from './pages/DocumentationPage';
 import DebugPage from './pages/DebugPage';
 import DecorativeElements from './components/DecorativeElements';
 import AzgaarMapIframe from './components/maps/AzgaarMapIframe';
-import LoginPage from 'pages/LoginPage';
+import LoginPage from './pages/LoginPage'; // Change from 'pages/LoginPage'
 import WorldSelectionPage from './pages/WorldSelectionPage';
 import './styles/UpdatedChatPage.css';
 
@@ -44,6 +44,20 @@ function App() {
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
+  };
+
+  // Add a navigation handler function that sets the isNavigating flag
+  const handleNavigation = () => {
+    // Signal pending operations to cancel
+    window.isNavigating = true;
+    
+    // Close sidebar after navigation on mobile
+    setIsSidebarOpen(false);
+    
+    // After navigation completes
+    setTimeout(() => {
+      window.isNavigating = false;
+    }, 500);
   };
 
   useEffect(() => {

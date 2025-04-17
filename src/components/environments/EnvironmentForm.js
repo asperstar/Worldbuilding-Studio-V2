@@ -1,9 +1,7 @@
-// src/components/environments/EnvironmentForm.js
 import React, { useState, useEffect, useRef } from 'react';
 import { useStorage } from '../../contexts/StorageContext';
 
-
-function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing, worlds = [] }) { // Add worlds prop
+function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing, worlds = [], onChange }) {
   const [environment, setEnvironment] = useState({
     name: '',
     description: '',
@@ -13,10 +11,11 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing, worl
     points_of_interest: '',
     dangers: '',
     imageUrl: '',
+    imageFile: null,
     imageSource: 'none',
     mapCoordinates: { x: 0, y: 0 },
     mapSize: { width: 1, height: 1 },
-    projectId: '' // Add projectId to state
+    projectId: ''
   });
   
   const [imagePreview, setImagePreview] = useState(null);
@@ -25,15 +24,15 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing, worl
   
   const { currentUser } = useStorage();
   
-  // Initialize form when editing
   useEffect(() => {
     if (initialEnvironment) {
       setEnvironment({
         ...initialEnvironment,
+        imageFile: null,
         imageSource: initialEnvironment.imageUrl ? 'upload' : 'none',
         mapCoordinates: initialEnvironment.mapCoordinates || { x: 0, y: 0 },
         mapSize: initialEnvironment.mapSize || { width: 1, height: 1 },
-        projectId: initialEnvironment.projectId || '' // Initialize projectId
+        projectId: initialEnvironment.projectId || ''
       });
       setImagePreview(initialEnvironment.imageUrl);
     } else {
@@ -41,10 +40,9 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing, worl
     }
   }, [initialEnvironment]);
 
-  // Clean up object URLs to prevent memory leaks
   useEffect(() => {
     return () => {
-      if (imagePreview && environment.imageSource === 'generated') {
+      if (imagePreview && (environment.imageSource === 'upload' || environment.imageSource === 'generated')) {
         URL.revokeObjectURL(imagePreview);
       }
     };
@@ -60,10 +58,11 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing, worl
       points_of_interest: '',
       dangers: '',
       imageUrl: '',
+      imageFile: null,
       imageSource: 'none',
       mapCoordinates: { x: 0, y: 0 },
       mapSize: { width: 1, height: 1 },
-      projectId: '' // Reset projectId
+      projectId: ''
     });
     setImagePreview(null);
     
@@ -73,9 +72,17 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing, worl
   };
 
   const handleChange = (e) => {
-    setEnvironment({
-      ...environment,
-      [e.target.name]: e.target.value
+    const { name, value } = e.target;
+    setEnvironment(prev => {
+      const updated = {
+        ...prev,
+        [name]: value || ''
+      };
+      // Call the onChange prop to notify the parent (EnvironmentsPage.js)
+      if (onChange) {
+        onChange(e);
+      }
+      return updated;
     });
   };
   
@@ -87,10 +94,18 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing, worl
       setIsUploading(true);
       const imageUrl = URL.createObjectURL(file);
       setImagePreview(imageUrl);
-      setEnvironment({
-        ...environment, 
-        imageUrl: imageUrl,
-        imageSource: 'upload'
+      setEnvironment(prev => {
+        const updated = {
+          ...prev, 
+          imageUrl: imageUrl,
+          imageFile: file,
+          imageSource: 'upload'
+        };
+        // Call the onChange prop to notify the parent
+        if (onChange) {
+          onChange(e);
+        }
+        return updated;
       });
     } catch (error) {
       console.error("Error uploading image:", error);
@@ -119,10 +134,18 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing, worl
     const url = URL.createObjectURL(svgBlob);
     
     setImagePreview(url);
-    setEnvironment({
-      ...environment, 
-      imageUrl: url,
-      imageSource: 'generated'
+    setEnvironment(prev => {
+      const updated = {
+        ...prev, 
+        imageUrl: url,
+        imageFile: svgBlob,
+        imageSource: 'generated'
+      };
+      // Call the onChange prop to notify the parent (simulated event)
+      if (onChange) {
+        onChange({ target: { name: 'imageFile', files: [svgBlob] } });
+      }
+      return updated;
     });
     
     if (fileInputRef.current) {
@@ -131,15 +154,23 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing, worl
   };
   
   const clearImage = () => {
-    if (imagePreview && environment.imageSource === 'generated') {
+    if (imagePreview && (environment.imageSource === 'upload' || environment.imageSource === 'generated')) {
       URL.revokeObjectURL(imagePreview);
     }
     
     setImagePreview(null);
-    setEnvironment({
-      ...environment, 
-      imageUrl: '',
-      imageSource: 'none'
+    setEnvironment(prev => {
+      const updated = {
+        ...prev, 
+        imageUrl: '',
+        imageFile: null,
+        imageSource: 'none'
+      };
+      // Call the onChange prop to notify the parent (simulated event)
+      if (onChange) {
+        onChange({ target: { name: 'imageFile', files: null } });
+      }
+      return updated;
     });
     
     if (fileInputRef.current) {
@@ -153,7 +184,7 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing, worl
     try {
       await onSave({
         ...environment,
-        userId: currentUser?.uid
+        userId: currentUser?.uid || ''
       });
     } catch (error) {
       console.error("Error submitting form:", error);
@@ -204,7 +235,7 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing, worl
                 {isUploading ? 'Uploading...' : 'Choose File'}
               </label>
               <span className="file-name">
-                {fileInputRef.current?.files?.[0]?.name || "No file chosen"}
+                {environment.imageFile ? (environment.imageFile.name || 'Image selected') : 'No file chosen'}
               </span>
             </div>
           </div>
@@ -231,7 +262,6 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing, worl
         </div>
       </div>
       
-      {/* Form Fields */}
       <div className="form-fields">
         <div className="form-group">
           <label htmlFor="name">Name:</label>
@@ -245,7 +275,6 @@ function EnvironmentForm({ onSave, onCancel, initialEnvironment, isEditing, worl
           />
         </div>
 
-        {/* Add World Selection Dropdown */}
         <div className="form-group">
           <label htmlFor="projectId">World:</label>
           <select

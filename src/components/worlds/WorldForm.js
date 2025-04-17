@@ -8,6 +8,7 @@ function WorldForm({ onSave, onCancel, initialWorld, isEditing }) {
     rules: '',
     lore: '',
     imageUrl: '',
+    imageFile: null, // Added this field
     imageSource: 'none',
     environmentIds: [],
     characterIds: []
@@ -21,6 +22,7 @@ function WorldForm({ onSave, onCancel, initialWorld, isEditing }) {
     if (initialWorld) {
       setWorld({
         ...initialWorld,
+        imageFile: null, // Reset file when loading from saved data
         imageSource: initialWorld.imageUrl ? 'upload' : 'none'
       });
       setImagePreview(initialWorld.imageUrl);
@@ -36,6 +38,7 @@ function WorldForm({ onSave, onCancel, initialWorld, isEditing }) {
       rules: '',
       lore: '',
       imageUrl: '',
+      imageFile: null, // Added this field
       imageSource: 'none',
       environmentIds: [],
       characterIds: []
@@ -62,6 +65,7 @@ function WorldForm({ onSave, onCancel, initialWorld, isEditing }) {
       setWorld({
         ...world, 
         imageUrl: imageUrl,
+        imageFile: file, // Store the actual file
         imageSource: 'upload'
       });
     }
@@ -88,6 +92,7 @@ function WorldForm({ onSave, onCancel, initialWorld, isEditing }) {
     setWorld({
       ...world, 
       imageUrl: url,
+      imageFile: svgBlob, // Store the blob as file
       imageSource: 'generated'
     });
     
@@ -101,6 +106,7 @@ function WorldForm({ onSave, onCancel, initialWorld, isEditing }) {
     setWorld({
       ...world, 
       imageUrl: '',
+      imageFile: null, // Clear the file too
       imageSource: 'none'
     });
     
@@ -117,7 +123,7 @@ function WorldForm({ onSave, onCancel, initialWorld, isEditing }) {
   // Clean up any object URLs to avoid memory leaks
   useEffect(() => {
     return () => {
-      if (imagePreview && world.imageSource !== 'none') {
+      if (imagePreview && (world.imageSource === 'upload' || world.imageSource === 'generated')) {
         URL.revokeObjectURL(imagePreview);
       }
     };
@@ -163,7 +169,7 @@ function WorldForm({ onSave, onCancel, initialWorld, isEditing }) {
             <div className="file-input-wrapper">
               <label htmlFor="world-image-upload" className="file-select-btn">Choose File</label>
               <span className="file-name">
-                {world.imageSource === 'upload' ? 'Image selected' : 'No file chosen'}
+                {world.imageFile ? (world.imageFile.name || 'Image selected') : 'No file chosen'}
               </span>
             </div>
           </div>

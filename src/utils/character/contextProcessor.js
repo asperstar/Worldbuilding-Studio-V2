@@ -507,7 +507,7 @@ export async function getCharacterById(characterId) {
   let character = null;
   for (const idToTry of idVariations) {
     console.log(`Trying ID variation: ${idToTry}`);
-    const docRef = doc(db, 'characters', idToTry);
+    const docRef = doc(db,`users/${userIdToUse}/characters`,  'characters', idToTry);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
       character = { id: docSnap.id, ...docSnap.data() };

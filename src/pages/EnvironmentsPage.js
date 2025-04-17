@@ -1,50 +1,76 @@
-import React, { useState, useEffect } from 'react';
-import EnvironmentForm from '../components/environments/EnvironmentForm';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { saveEnvironments, deleteEnvironment } from '../utils/storageExports';
 import { useStorage } from '../contexts/StorageContext';
 import debounce from 'lodash/debounce';
+import { storage, ref, uploadBytes, getDownloadURL } from '../utils/firebase';
+import { useNavigate } from 'react-router-dom';
+
+const EnvironmentForm = lazy(() => import('../components/environments/EnvironmentForm'));
+
+// Debounced save for auto-saving only
+const debouncedSaveEnvironment = debounce(async (environmentData, userId) => {
+  try {
+    await saveEnvironments([environmentData], userId);
+    return true;
+  } catch (error) {
+    console.error("Error in debounced save:", error);
+    return false;
+  }
+}, 300);
 
 function EnvironmentsPage() {
+  const navigate = useNavigate();
   const { currentUser, getAllEnvironments, getWorlds } = useStorage();
   const [environments, setEnvironments] = useState([]);
-  const [worlds, setWorlds] = useState([]);
   const [editingEnvironment, setEditingEnvironment] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filteredEnvironments, setFilteredEnvironments] = useState([]);
+  const [worlds, setWorlds] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [saveError, setSaveError] = useState(null);
   const [draftEnvironment, setDraftEnvironment] = useState(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
-    climate: '',
     description: '',
-    imageUrl: '',
-    projectId: ''
+    projectId: '',
+    imageUrl: ''
   });
 
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
+      setError(null);
       try {
-        const savedEnvironments = await getAllEnvironments();
-        setEnvironments(savedEnvironments || []);
-        setFilteredEnvironments(savedEnvironments || []);
+        if (!currentUser) {
+          setError('User not authenticated. Please log in.');
+          setIsLoading(false);
+          return;
+        }
 
-        const savedWorlds = await getWorlds();
-        setWorlds(savedWorlds || []);
-      } catch (error) {
-        console.error("Error loading data:", error);
-        setError("Failed to load environments or worlds.");
+        const [fetchedEnvironments, fetchedWorlds] = await Promise.all([
+          getAllEnvironments(),
+          getWorlds()
+        ]);
+
+        setEnvironments(fetchedEnvironments || []);
+        setWorlds(fetchedWorlds || []);
+      } catch (err) {
+        console.error("Error loading data:", err);
+        if (err.message.includes('not authenticated') || err.message.includes('Missing or insufficient permissions')) {
+          setError('Authentication error. Please log in again.');
+          navigate('/login');
+        } else if (err.code === 'unavailable') {
+          setError('Network error. Please check your internet connection and try again.');
+        } else {
+          setError('Failed to load environments and worlds. Please try again.');
+        }
       } finally {
         setIsLoading(false);
       }
     };
 
-    if (currentUser) {
-      fetchData();
-    }
-  }, [currentUser, getAllEnvironments, getWorlds]);
+    fetchData();
+  }, [currentUser, getAllEnvironments, getWorlds, navigate]);
 
   const autoSave = debounce(async (environmentData) => {
     if (!currentUser || !environmentData.name) return;
@@ -59,17 +85,23 @@ function EnvironmentsPage() {
       };
 
       if (!draftEnvironment) {
-        environmentToSave.id = Date.now().toString();
-        await saveEnvironments([environmentToSave], currentUser);
+        environmentToSave.id = `env_${Date.now()}`;
+        await debouncedSaveEnvironment(environmentToSave, currentUser.uid);
         setDraftEnvironment(environmentToSave);
       } else {
+        environmentToSave.id = draftEnvironment.id;
         const updatedEnvironment = { ...draftEnvironment, ...environmentToSave };
-        await saveEnvironments([updatedEnvironment], currentUser);
+        await debouncedSaveEnvironment(updatedEnvironment, currentUser.uid);
         setDraftEnvironment(updatedEnvironment);
       }
     } catch (error) {
       console.error('Error auto-saving environment:', error);
-      setError('Failed to auto-save environment.');
+      if (error.message.includes('User not authenticated')) {
+        setError('Session expired. Please log in again.');
+        navigate('/login');
+      } else {
+        setError('Failed to auto-save environment.');
+      }
     }
   }, 1000);
 
@@ -81,6 +113,131 @@ function EnvironmentsPage() {
       autoSave(updated);
       return updated;
     });
+  };
+
+  const saveEnvironment = async (newEnvironment) => {
+    try {
+      setIsLoading(true);
+      setSaveError(null);
+
+      // Check for duplicates (excluding drafts)
+      if (!editingEnvironment && environments.some(env => env.name === newEnvironment.name && !env.isDraft)) {
+        setSaveError(`An environment named "${newEnvironment.name}" already exists. Please use a different name.`);
+        setIsLoading(false);
+        return;
+      }
+
+      // Process image if present
+      let imageUrl = newEnvironment.imageUrl || '';
+      if (newEnvironment.imageFile) {
+        try {
+          const userId = currentUser.uid;
+          const imageId = Date.now().toString();
+          const storageRef = ref(storage, `users/${userId}/environments/${imageId}`);
+          await uploadBytes(storageRef, newEnvironment.imageFile);
+          imageUrl = await getDownloadURL(storageRef);
+        } catch (imageError) {
+          console.error("Error uploading image:", imageError);
+          setSaveError("Image upload failed, but environment will be saved without image");
+        }
+      }
+
+      let updatedEnvironment;
+      const environmentId = editingEnvironment ?
+        editingEnvironment.id.toString() :
+        (draftEnvironment ? draftEnvironment.id : `env_${Date.now()}`);
+
+      updatedEnvironment = {
+        ...newEnvironment,
+        id: environmentId,
+        imageUrl,
+        imageFile: null,
+        created: editingEnvironment ? editingEnvironment.created : (draftEnvironment ? draftEnvironment.created : new Date().toISOString()),
+        updated: new Date().toISOString(),
+        userId: currentUser.uid,
+        isDraft: false,
+      };
+
+      // Save environment (without debounce for manual save)
+      await saveEnvironments([updatedEnvironment], currentUser.uid);
+
+      // Optimistic update: Add the new environment to the list immediately
+      if (editingEnvironment) {
+        setEnvironments(prev => prev.map(env => env.id === updatedEnvironment.id ? updatedEnvironment : env));
+      } else {
+        setEnvironments(prev => {
+          if (prev.some(env => env.id === updatedEnvironment.id)) {
+            return prev;
+          }
+          return [...prev, updatedEnvironment];
+        });
+      }
+
+      // Wait briefly to allow Firestore to reflect the write, then fetch the latest data
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const fetchedEnvironments = await getAllEnvironments(true);
+      console.log('Fetched environments after save:', fetchedEnvironments);
+      setEnvironments(fetchedEnvironments || []);
+
+      // Reset form state
+      setEditingEnvironment(null);
+      setDraftEnvironment(null);
+      setHasUnsavedChanges(false);
+      setFormData({
+        name: '',
+        description: '',
+        projectId: '',
+        imageUrl: ''
+      });
+    } catch (error) {
+      console.error("Error saving environment:", error);
+      setSaveError(`Failed to save environment: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const startEditing = (environment) => {
+    setEditingEnvironment(environment);
+    setFormData({
+      name: environment.name || '',
+      description: environment.description || '',
+      projectId: environment.projectId || '',
+      imageUrl: environment.imageUrl || ''
+    });
+    setDraftEnvironment(null);
+    setHasUnsavedChanges(false);
+  };
+
+  const cancelEditing = () => {
+    setEditingEnvironment(null);
+    setDraftEnvironment(null);
+    setHasUnsavedChanges(false);
+    setFormData({
+      name: '',
+      description: '',
+      projectId: '',
+      imageUrl: ''
+    });
+  };
+
+  const handleDeleteEnvironment = async (environmentId) => {
+    if (window.confirm('Are you sure you want to delete this environment?')) {
+      try {
+        setIsLoading(true);
+        setError(null);
+        await deleteEnvironment(environmentId, currentUser.uid);
+        setEnvironments(prevEnvs => prevEnvs.filter(env => env.id !== environmentId));
+        // Force refresh after deletion
+        const fetchedEnvironments = await getAllEnvironments(true);
+        setEnvironments(fetchedEnvironments || []);
+      } catch (error) {
+        console.error("Error deleting environment:", error);
+        setError(`Failed to delete environment: ${error.message}`);
+      } finally {
+        setIsLoading(false);
+      }
+    }
   };
 
   useEffect(() => {
@@ -95,205 +252,49 @@ function EnvironmentsPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges]);
 
-  const saveEnvironment = async (newEnvironment) => {
-    const imageUrl = newEnvironment.imageUrl || '';
-    try {
-      if (editingEnvironment) {
-        const updatedEnvironment = {
-          ...newEnvironment,
-          id: editingEnvironment.id,
-          imageUrl,
-          created: editingEnvironment.created,
-          updated: new Date().toISOString(),
-          userId: currentUser?.uid,
-          projectId: newEnvironment.projectId || editingEnvironment.projectId,
-          isDraft: false,
-        };
-        const updatedEnvironments = environments.map(env =>
-          env.id === editingEnvironment.id ? updatedEnvironment : env
-        );
-        await saveEnvironments(updatedEnvironments, currentUser);
-        setEnvironments(updatedEnvironments);
-        setEditingEnvironment(null);
-      } else if (draftEnvironment) {
-        const updatedEnvironment = {
-          ...draftEnvironment,
-          ...newEnvironment,
-          imageUrl,
-          updated: new Date().toISOString(),
-          userId: currentUser?.uid,
-          isDraft: false,
-        };
-        const updatedEnvironments = [...environments, updatedEnvironment];
-        await saveEnvironments(updatedEnvironments, currentUser);
-        setEnvironments(updatedEnvironments);
-      } else {
-        const newEnvironmentWithId = {
-          ...newEnvironment,
-          imageUrl,
-          id: Date.now().toString(),
-          created: new Date().toISOString(),
-          updated: new Date().toISOString(),
-          userId: currentUser?.uid,
-          projectId: newEnvironment.projectId || '',
-          isDraft: false,
-        };
-        const updatedEnvironments = [...environments, newEnvironmentWithId];
-        await saveEnvironments(updatedEnvironments, currentUser);
-        setEnvironments(updatedEnvironments);
-      }
-      setDraftEnvironment(null);
-      setHasUnsavedChanges(false);
-      setFormData({
-        name: '',
-        climate: '',
-        description: '',
-        imageUrl: '',
-        projectId: ''
-      });
-    } catch (error) {
-      console.error("Error saving environment:", error);
-      setError("Failed to save environment.");
-    }
-  };
-
-  const startEditing = (environment) => {
-    setEditingEnvironment(environment);
-    setFormData({
-      name: environment.name || '',
-      climate: environment.climate || '',
-      description: environment.description || '',
-      imageUrl: environment.imageUrl || '',
-      projectId: environment.projectId || ''
-    });
-    setDraftEnvironment(null);
-    setHasUnsavedChanges(false);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const cancelEditing = () => {
-    setEditingEnvironment(null);
-    setDraftEnvironment(null);
-    setHasUnsavedChanges(false);
-    setFormData({
-      name: '',
-      climate: '',
-      description: '',
-      imageUrl: '',
-      projectId: ''
-    });
-  };
-
-  const handleDeleteEnvironment = async (id) => {
-    if (editingEnvironment && editingEnvironment.id === id) {
-      setEditingEnvironment(null);
-    }
-
-    try {
-      await deleteEnvironment(id);
-      setEnvironments(prevEnvironments => prevEnvironments.filter(env => env.id !== id));
-    } catch (error) {
-      console.error("Error deleting environment:", error);
-      setError("Failed to delete environment. Please try again.");
-    }
-  };
-
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFilteredEnvironments(environments);
-    } else {
-      const query = searchQuery.toLowerCase();
-      const filtered = environments.filter(env =>
-        env.name.toLowerCase().includes(query) ||
-        (env.climate && env.climate.toLowerCase().includes(query)) ||
-        (env.description && env.description.toLowerCase().includes(query))
-      );
-      setFilteredEnvironments(filtered);
-    }
-  }, [searchQuery, environments]);
-
-  if (isLoading) {
-    return <div className="loading">Loading environments...</div>;
-  }
-
-  if (error) {
-    return <div className="error-message">{error}</div>;
-  }
-
   return (
     <div className="environments-page">
       <h1>Environments</h1>
       {error && <div className="error-message">{error}</div>}
+      {saveError && (
+        <div className="save-error-message" style={{ backgroundColor: 'orange', color: 'white', padding: '10px' }}>
+          {saveError}
+        </div>
+      )}
       <div className="page-content">
         <div className="form-section">
           <h2>{editingEnvironment ? 'Edit Environment' : 'Create New Environment'}</h2>
-          <EnvironmentForm
-            onSave={saveEnvironment}
-            initialEnvironment={editingEnvironment || formData}
-            onCancel={cancelEditing}
-            isEditing={!!editingEnvironment}
-            worlds={worlds}
-            onChange={handleFormChange}
-          />
+          <Suspense fallback={<div>Loading form...</div>}>
+            <EnvironmentForm
+              onSave={saveEnvironment}
+              initialEnvironment={editingEnvironment || formData}
+              onCancel={cancelEditing}
+              isEditing={!!editingEnvironment}
+              worlds={worlds}
+              onChange={handleFormChange}
+            />
+          </Suspense>
         </div>
         <div className="environments-list">
-          <div className="list-header">
-            <h2>Your Environments ({environments.length})</h2>
-            <input
-              type="text"
-              placeholder="Search environments..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="search-input"
-            />
-          </div>
-          {filteredEnvironments.length === 0 ? (
-            searchQuery ? (
-              <p className="no-results">No environments found matching "{searchQuery}"</p>
-            ) : (
-              <p className="no-environments">No environments created yet.</p>
-            )
+          <h2>Your Environments ({environments.length})</h2>
+          {isLoading ? (
+            <div>Loading environments...</div>
+          ) : environments.length === 0 ? (
+            <p>No environments created yet.</p>
           ) : (
             <ul className="environment-cards">
-              {filteredEnvironments.map(env => {
-                const world = worlds.find(w => w.id === env.projectId);
-                return (
-                  <li key={env.id} className="environment-card">
-                    <div className="card-header">
-                      {env.imageUrl ? (
-                        <div className="environment-image">
-                          <img src={env.imageUrl} alt={env.name} />
-                        </div>
-                      ) : (
-                        <div className="environment-icon">
-                          <span className="icon-text">{env.name ? env.name[0].toUpperCase() : 'E'}</span>
-                        </div>
-                      )}
-                      <h3>{env.name}</h3>
-                    </div>
-                    <div className="card-content">
-                      {env.climate && <p className="climate"><strong>Climate:</strong> {env.climate}</p>}
-                      {env.description && (
-                        <p className="description">
-                          {env.description.length > 100
-                            ? `${env.description.substring(0, 100)}...`
-                            : env.description
-                          }
-                        </p>
-                      )}
-                      <p className="world"><strong>World:</strong> {world ? world.name : 'No World'}</p>
-                    </div>
-                    <div className="card-actions">
-                      <button onClick={() => startEditing(env)} className="edit-button">
-                        Edit
-                      </button>
-                      <button onClick={() => handleDeleteEnvironment(env.id)} className="delete-button">
-                        Delete
-                      </button>
-                    </div>
-                  </li>
-                );
-              })}
+              {environments.map(env => (
+                <li key={env.id} className="environment-card">
+                  <h3>{env.name || 'Unnamed Environment'}</h3>
+                  {env.description && <p>{env.description}</p>}
+                  {env.projectId && worlds.length > 0 && (
+                    <p>World: {worlds.find(w => w.id === env.projectId)?.name || 'Unknown World'}</p>
+                  )}
+                  {env.imageUrl && <img src={env.imageUrl} alt={env.name} style={{ maxWidth: '100px' }} />}
+                  <button onClick={() => startEditing(env)}>Edit</button>
+                  <button onClick={() => handleDeleteEnvironment(env.id)}>Delete</button>
+                </li>
+              ))}
             </ul>
           )}
         </div>

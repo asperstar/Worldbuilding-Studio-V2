@@ -152,7 +152,7 @@ export const loadCharacter = async (characterId) => {
       throw new Error('Invalid character ID');
     }
     
-    const characterRef = doc(db, 'characters', cleanedId);
+    const characterRef = doc(db, `users/${userIdToUse}/characters`,  'characters', cleanedId);
     const characterDoc = await getDoc(characterRef);
     
     if (!characterDoc.exists()) {
@@ -195,7 +195,7 @@ export const saveCharacter = async (character) => {
     }
     
     // Save to Firestore
-    const characterRef = doc(db, 'characters', character.id.toString());
+    const characterRef = doc(db,`users/${userIdToUse}/characters`,  'characters', character.id.toString());
     await setDoc(characterRef, { 
       ...processedCharacter, 
       userId,
@@ -215,7 +215,7 @@ export const saveCharacters = async (characters) => {
     const batch = writeBatch(db);
     
     for (const character of characters) {
-      const characterRef = doc(db, 'characters', character.id.toString());
+      const characterRef = doc(db, `users/${userIdToUse}/characters`,  'characters', character.id.toString());
       batch.set(characterRef, { 
         ...character,
         userId,
@@ -236,7 +236,7 @@ export const deleteCharacter = async (characterId) => {
     const userId = validateUser();
     
     // Delete from Firestore
-    await deleteDoc(doc(db, 'characters', characterId.toString()));
+    await deleteDoc(doc(db, `users/${userIdToUse}/characters`,  'characters', characterId.toString()));
     
     // Also delete associated image if exists
     try {

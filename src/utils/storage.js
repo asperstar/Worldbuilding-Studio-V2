@@ -232,7 +232,7 @@ export const saveCharacter = async (character, userId = null) => {
     const userIdToUse = userId || user.uid;
     
     const characterToSave = { ...character, userId: userIdToUse };
-    await setDoc(doc(db, 'characters', character.id.toString()), characterToSave);
+    await setDoc(doc(db, `users/${userIdToUse}/characters`,   'characters', character.id.toString()), characterToSave);
     return true;
   } catch (error) {
     console.error('Error saving character to Firestore:', error);
@@ -247,7 +247,7 @@ export const saveCharacters = async (characters, userId = null) => {
     
     for (const character of characters) {
       const characterToSave = { ...character, userId: userIdToUse };
-      await setDoc(doc(db, 'characters', character.id.toString()), characterToSave);
+      await setDoc(doc(db,`users/${userIdToUse}/characters`,  'characters', character.id.toString()), characterToSave);
     }
     return true;
   } catch (error) {
@@ -261,9 +261,9 @@ export const deleteCharacter = async (characterId, userId = null) => {
     const user = ensureAuthenticated();
     const userIdToUse = userId || user.uid;
     
-    const characterDoc = await getDoc(doc(db, 'characters', characterId.toString()));
+    const characterDoc = await getDoc(doc(db,`users/${userIdToUse}/characters`,  'characters', characterId.toString()));
     if (characterDoc.exists() && characterDoc.data().userId === userIdToUse) {
-      await deleteDoc(doc(db, 'characters', characterId.toString()));
+      await deleteDoc(doc(db,`users/${userIdToUse}/characters`,  'characters', characterId.toString()));
       return true;
     } else {
       throw new Error('Unauthorized or character not found');

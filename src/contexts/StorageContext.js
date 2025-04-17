@@ -1,6 +1,6 @@
 /* eslint-disable no-undef*/
 
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useMemo } from 'react';
 import { auth } from '../firebase';
 import { onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { db } from '../firebase';
@@ -789,7 +789,7 @@ export function StorageProvider({ children }) {
     }
   };
 
-  const value = {
+  const value = useMemo(() => ({
     currentUser,
     isLoading,
     error,
@@ -820,7 +820,12 @@ export function StorageProvider({ children }) {
     updateCampaignSession,
     removeCampaign,
     getWorldCampaigns
-  };
+  }), [
+    currentUser,
+    isLoading,
+    error,
+    firebaseStatus,
+  ]);
 
   return (
     <StorageContext.Provider value={value}>
