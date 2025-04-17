@@ -14,65 +14,67 @@ const ensureAuthenticated = () => {
 };
 
 // Utility function to deep clean an object for Firestore
+// Updated deepCleanForFirestore function
 const deepCleanForFirestore = (obj, visited = new WeakSet()) => {
   if (obj === null || obj === undefined) {
     return null;
   }
-  if (obj instanceof File || obj instanceof Blob) {
-    console.log('Found File or Blob object, skipping:', obj);
-    return null; // Exclude File and Blob objects
+  
+  // Check for common non-serializable types
+  if (
+    obj instanceof File || 
+    obj instanceof Blob || 
+    typeof obj === 'function' || 
+    (typeof obj === 'object' && obj !== null && 'auth' in obj)
+  ) {
+    console.log('Found non-serializable object, skipping:', obj);
+    return null;
   }
+  
   if (typeof obj !== 'object') {
     return obj;
   }
+  
   if (visited.has(obj)) {
     console.warn('Circular reference detected in object, skipping:', obj);
     return null;
   }
+  
   visited.add(obj);
+  
   if (Array.isArray(obj)) {
     return obj
       .map(item => deepCleanForFirestore(item, visited))
       .filter(item => item !== null && item !== undefined);
   }
+  
   const cleaned = {};
   for (const key of Object.keys(obj)) {
     const value = obj[key];
-    if (value && typeof value === 'object' && value.constructor && value.constructor.name === 'userImpl') {
-      console.log(`Found userImpl object in field '${key}':`, value);
+    
+    // Skip common problematic fields
+    if (['auth', 'user', 'userData', 'currentUser'].includes(key)) {
+      console.log(`Removing potentially problematic field '${key}'`);
       continue;
     }
-    if (key === 'user') {
-      console.log(`Removing 'user' field with value:`, value);
-      continue;
-    }
+    
     if (value === undefined) {
       console.log(`Removing undefined field '${key}'`);
       continue;
     }
+    
     if (typeof value === 'object') {
       const cleanedValue = deepCleanForFirestore(value, visited);
       if (cleanedValue !== null && cleanedValue !== undefined) {
-        let hasUndefined = false;
-        if (cleanedValue && typeof cleanedValue === 'object') {
-          for (const nestedKey in cleanedValue) {
-            if (cleanedValue[nestedKey] === undefined) {
-              hasUndefined = true;
-              console.log(`Found undefined nested field '${key}.${nestedKey}'`);
-              break;
-            }
-          }
-        }
-        if (!hasUndefined) {
-          cleaned[key] = cleanedValue;
-        } else {
-          console.log(`Skipping field '${key}' due to nested undefined values`);
-        }
+        cleaned[key] = cleanedValue;
       }
-    } else {
+    } else if (typeof value !== 'function') {
       cleaned[key] = value;
+    } else {
+      console.log(`Removing function in field '${key}'`);
     }
   }
+  
   return Object.keys(cleaned).length > 0 ? cleaned : null;
 };
 
@@ -220,14 +222,34 @@ export const loadCampaign = async (campaignId, userId = null) => {
 export const saveCampaign = async (campaign, userId = null) => {
   try {
     const userIdToUse = userId || (await ensureAuthenticated());
+    
+    // Make a copy of the campaign object to avoid modifying the original
+    const campaignCopy = { ...campaign };
+    
+    // Explicitly remove problematic fields
+    delete campaignCopy.user;
+    delete campaignCopy.userData;
+    delete campaignCopy.auth;
+    delete campaignCopy.currentUser;
+    
+    // For safety, ensure participantIds is an array if it exists
+    if (campaignCopy.participantIds && !Array.isArray(campaignCopy.participantIds)) {
+      campaignCopy.participantIds = [];
+    }
+    
     const campaignToSave = deepCleanForFirestore({
-      ...campaign,
+      ...campaignCopy,
       userId: userIdToUse,
       updated: new Date().toISOString(),
     });
+    
     if (!campaignToSave || !campaignToSave.id) {
+      console.error('Failed to clean campaign data', campaignCopy);
       throw new Error('Failed to clean campaign data');
     }
+    
+    console.log('Clean campaign data to save:', campaignToSave);
+    
     await setDoc(doc(db, `users/${userIdToUse}/campaigns`, campaignToSave.id.toString()), campaignToSave, { merge: true });
     console.log(`Campaign ${campaignToSave.id} saved successfully`);
     return true;

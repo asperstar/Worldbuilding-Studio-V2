@@ -220,7 +220,7 @@ function CampaignsPage() {
     try {
       console.log("Creating campaign...");
       const parsedWorldId = parseInt(worldId);
-
+  
       const campaignData = isCreating ?
         {
           name: newCampaign.name || `New Campaign in ${world?.name || 'World'}`,
@@ -229,36 +229,34 @@ function CampaignsPage() {
         {
           name: `New Campaign in ${world?.name || 'World'}`
         };
-
+  
       let campaignToSave;
       if (draftCampaign) {
+        // Only copy needed fields to avoid circular references
         campaignToSave = {
-          ...draftCampaign,
+          id: draftCampaign.id,
           name: campaignData.name,
           description: campaignData.description,
+          participantIds: draftCampaign.participantIds || [],
+          scenes: draftCampaign.scenes || [],
+          worldId: parsedWorldId,
           isDraft: false,
+          created: draftCampaign.created,
           updated: new Date().toISOString(),
         };
       } else {
         campaignToSave = createCampaignModel(parsedWorldId, {
           ...campaignData,
           worldId: parsedWorldId,
-          userId: currentUser.uid,
           created: new Date().toISOString(),
           updated: new Date().toISOString(),
         });
       }
-
-      campaignToSave.scenes = [
-        createSceneModel({
-          title: 'Introduction',
-          description: 'The beginning of your adventure',
-          characterIds: campaignToSave.participantIds || []
-        })
-      ];
-
+  
+      // Ensure we're not passing user object or circular references
+      // Only pass the user ID string
       console.log("Saving campaign:", campaignToSave);
-      await saveCampaign(campaignToSave, currentUser);
+      await saveCampaign(campaignToSave, currentUser?.uid);
       console.log("Campaign saved successfully");
 
       if (world) {
