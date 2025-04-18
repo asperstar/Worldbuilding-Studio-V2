@@ -4,24 +4,26 @@ import { storage } from '../../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 function CharacterForm({ onSave, onCancel, initialCharacter, isEditing, isSubmitting = false, onChange, currentUser }) {
-  const [character, setCharacter] = useState({
-    name: '',
-    personality: '',
-    background: '',
-    traits: '',
-    appearance: '',
-    imageUrl: '',
-    imageFile: null,
-    imageSource: 'none',
-    writingSample: '',
-    documentUrl: '',
-    documentFile: null,
-  });
-  const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
-  const [imageAnalysisResult, setImageAnalysisResult] = useState(null);
-  const [imageUploadError, setImageUploadError] = useState(null);
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const [imagePreview, setImagePreview] = useState(null);
+// Current state declarations look like this:
+const [character, setCharacter] = useState({
+  name: '',
+  personality: '',
+  background: '',
+  traits: '',
+  appearance: '',
+  imageUrl: '',
+  imageFile: null,
+  imageSource: 'none',
+  writingSample: '',
+  documentUrl: '',
+  documentFile: null,
+});
+const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
+const [imageAnalysisResult, setImageAnalysisResult] = useState(null);
+const [imageUploadError, setImageUploadError] = useState(null);
+// Add this line:
+const [isUploadingImage, setIsUploadingImage] = useState(false);
+const [imagePreview, setImagePreview] = useState(null);
   const fileInputRef = useRef(null);
   const [relationships, setRelationships] = useState([]);
   const [newRelationshipName, setNewRelationshipName] = useState('');
@@ -109,7 +111,7 @@ function CharacterForm({ onSave, onCancel, initialCharacter, isEditing, isSubmit
     const file = e.target.files[0];
     if (!file) return;
     
-    setIsUploading(true);
+    setIsUploadingImage(true);
     setImageUploadError(null);
     
     try {
@@ -131,7 +133,7 @@ function CharacterForm({ onSave, onCancel, initialCharacter, isEditing, isSubmit
       console.error("Image upload error:", error);
       setImageUploadError(error.message || "Failed to upload image");
     } finally {
-      setIsUploading(false);
+      setIsUploadingImage(false);
     }
   };
 

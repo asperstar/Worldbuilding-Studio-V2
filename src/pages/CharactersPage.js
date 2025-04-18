@@ -24,7 +24,7 @@ const debouncedSaveCharacter = debounce(async (characterData, userId) => {
 
 function CharactersPage() {
   const navigate = useNavigate();
-  const { currentUser, getAllCharacters, testStorage } = useStorage();
+  const { currentUser, getAllCharacters, testStorage, saveOneCharacter } = useStorage();
   const [characters, setCharacters] = useState([]);
   const [editingCharacter, setEditingCharacter] = useState(null);
   const [storageStatus, setStorageStatus] = useState({ tested: false, working: false });
