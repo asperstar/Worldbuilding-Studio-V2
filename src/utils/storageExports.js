@@ -328,46 +328,70 @@ export const loadCharacters = async (userId = null, projectId = null) => {
 
 export const saveCharacter = async (character, userId = null) => {
   try {
+    // Ensure we have a user ID
     const userIdToUse = userId || (await ensureAuthenticated());
+    if (!userIdToUse) {
+      throw new Error('Cannot save character: no user ID provided');
+    }
     
     // Generate a consistent ID if one doesn't exist
     const characterId = character.id || `char_${Date.now()}`;
     character.id = characterId;
     
-    // Handle image upload if needed
+    // Handle image upload if needed - but only if we have an actual File object
     let imageUrl = character.imageUrl || '';
-    if (character.imageFile) {
+    if (character.imageFile && character.imageFile instanceof File) {
       try {
         const storageRef = ref(storage, `users/${userIdToUse}/characters/${characterId}`);
         await uploadBytes(storageRef, character.imageFile);
         imageUrl = await getDownloadURL(storageRef);
-        character.imageUrl = imageUrl;
+        
+        // Update the URL only if we successfully uploaded
+        console.log(`Successfully uploaded image for character ${characterId}, URL: ${imageUrl}`);
       } catch (error) {
-        console.error("Error uploading character image:", error);
-        // Continue without the image
+        console.error(`Error uploading character image for ${characterId}:`, error);
+        // Continue without the image but don't override existing URL if any
+        if (!character.imageUrl) {
+          console.log('No existing image URL, continuing without image');
+        } else {
+          console.log('Keeping existing image URL:', character.imageUrl);
+          imageUrl = character.imageUrl;
+        }
       }
+    } else if (character.imageUrl) {
+      console.log(`Using existing image URL for character ${characterId}: ${character.imageUrl}`);
+      imageUrl = character.imageUrl;
     }
     
     // Remove imageFile from what gets saved to Firestore
     const { imageFile, ...characterToSave } = character;
     
+    // Create a clean object to save to Firestore
+    const cleanedCharacter = {
+      ...characterToSave,
+      imageUrl, // Use our processed imageUrl
+      userId: userIdToUse,
+      updated: new Date().toISOString()
+    };
+    
     // Ensure the document exists (to prevent duplicates)
     const characterRef = doc(db, `users/${userIdToUse}/characters`, characterId.toString());
     
-    // Save to Firestore
-    await setDoc(characterRef, {
-      ...characterToSave,
-      userId: userIdToUse,
-      updated: new Date().toISOString()
-    }, { merge: true });
+    console.log(`Saving character ${characterId} to Firestore:`, cleanedCharacter);
     
+    // Save to Firestore
+    await setDoc(characterRef, cleanedCharacter, { merge: true });
+    
+    // Add a small delay to ensure Firebase has time to update
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    console.log(`Character ${characterId} saved successfully`);
     return true;
   } catch (error) {
-    console.error('Error saving character:', error);
+    console.error(`Error saving character ${character.id}:`, error);
     throw error;
   }
 };
-
 export const saveCharacters = async (characters, userId = null) => {
   try {
     const userIdToUse = userId || (await ensureAuthenticated());

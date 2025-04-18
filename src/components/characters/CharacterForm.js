@@ -108,10 +108,10 @@ function CharacterForm({ onSave, onCancel, initialCharacter, isEditing, isSubmit
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-  
+    
+    setIsUploading(true);
     setImageUploadError(null);
-    setIsUploadingImage(true);
-  
+    
     try {
       // Create URL for preview
       const previewUrl = URL.createObjectURL(file);
@@ -123,15 +123,15 @@ function CharacterForm({ onSave, onCancel, initialCharacter, isEditing, isSubmit
         imageFile: file,
         imageSource: 'upload'
       }));
-  
+      
       if (onChange) {
         onChange({ target: { name: 'imageFile', value: file } });
       }
     } catch (error) {
       console.error("Image upload error:", error);
-      setImageUploadError(error.message);
+      setImageUploadError(error.message || "Failed to upload image");
     } finally {
-      setIsUploadingImage(false);
+      setIsUploading(false);
     }
   };
 
@@ -307,19 +307,35 @@ const handleDocumentUpload = async (e) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSubmitting) return;
-
+  
     try {
+      // First upload the image if there's one
+      let imageUrl = character.imageUrl || '';
+      if (character.imageFile && currentUser?.uid) {
+        try {
+          const imageId = `char_${Date.now()}`;
+          const storageRef = ref(storage, `users/${currentUser.uid}/characters/${imageId}`);
+          await uploadBytes(storageRef, character.imageFile);
+          imageUrl = await getDownloadURL(storageRef);
+        } catch (imageError) {
+          console.error("Image upload failed during save:", imageError);
+          setImageUploadError("Image upload failed, but character will be saved");
+        }
+      }
+      
       const characterData = {
         ...character,
+        imageUrl: imageUrl, // Use the Firebase URL instead of object URL
+        imageFile: null, // Don't store File object in Firestore
         relationships: relationships,
         updated: new Date().toISOString()
       };
+      
       await onSave(characterData);
     } catch (error) {
       console.error("Error submitting character:", error);
     }
   };
-
   useEffect(() => {
     return () => {
       if (imagePreview && (character.imageSource === 'upload' || character.imageSource === 'generated')) {

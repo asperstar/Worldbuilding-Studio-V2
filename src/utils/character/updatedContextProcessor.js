@@ -42,6 +42,7 @@ export const enhanceCharacterAPI = async (characterId, userInput, previousMessag
       }
     }
 
+    // Process memories if not in a campaign
     let memories = '';
     if (!campaignId) {
       try {
@@ -55,13 +56,15 @@ export const enhanceCharacterAPI = async (characterId, userInput, previousMessag
       }
     }
 
+    // Format previous messages
     const historyMessages = previousMessages
       .slice(-5)
       .map(msg => ({
-        role: msg.sender,
+        role: msg.sender === 'user' ? 'user' : 'assistant',
         content: msg.text || msg.content,
       }));
 
+    // Build contextual information
     let contextualInfo = '';
     let characterInfo = '';
 
@@ -90,7 +93,7 @@ export const enhanceCharacterAPI = async (characterId, userInput, previousMessag
         }
       }
     } else {
-      characterInfo = `You are ${character.name}.`;
+      characterInfo = `You are roleplaying as ${character.name}.`;
       if (character.personality) characterInfo += `\nPersonality: ${character.personality}`;
       if (character.background) characterInfo += `\nBackground: ${character.background}`;
       if (character.traits) characterInfo += `\nTraits: ${character.traits}`;
@@ -101,32 +104,40 @@ export const enhanceCharacterAPI = async (characterId, userInput, previousMessag
       }
     }
 
+    // Add mode-specific instructions
     const modePrompt = rpMode === 'family-friendly'
       ? `\nAvoid any sexual content, violence, or morally ambiguous themes. Respond with a positive, safe tone.`
       : `\nAvoid sexual content, but you may include violent or morally ambiguous themes as appropriate to your character.`;
 
-    const context = `${characterInfo}${modePrompt}\n\n${contextualInfo}\n\nConversation History:\n${historyMessages.length > 0 ? historyMessages.map(msg => `${msg.role === 'user' ? 'User' : character.name}: ${msg.content}`).join('\n') : 'No previous conversation'}`;
+    // Build complete system prompt
+    const systemPrompt = `${characterInfo}${modePrompt}\n\n${contextualInfo}\n\nConversation History:\n${historyMessages.length > 0 ? historyMessages.map(msg => `${msg.role === 'user' ? 'User' : character.name}: ${msg.content}`).join('\n') : 'No previous conversation'}`;
 
-    const messages = [
+    // Construct Grok messages
+    const grokMessages = [
+      { role: 'system', content: systemPrompt },
       ...historyMessages,
-      { role: 'user', content: userInput },
+      { role: 'user', content: userInput }
     ];
 
-    console.log('Sending request to /api/chat:', { messages, character: character.name, context });
+    console.log('Sending request to Grok API with character:', character.name);
 
     // Use the configured API URL from environment or fallback to relative path
     const API_URL = process.env.REACT_APP_API_URL || '';
+    
+    // Make the request to your backend API that forwards to Grok
     const response = await fetch(`${API_URL}/api/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        messages,
+        messages: grokMessages,
         character: character.name,
-        context,
-        isGameMaster: character.isGameMaster || isGameMaster,
+        useGrok3: true, // Explicitly request Grok 3
+        temperature: temperature
       }),
+      // Add a timeout to prevent hanging requests
+      signal: AbortSignal.timeout(30000) // 30 second timeout
     });
 
     if (!response.ok) {
@@ -136,18 +147,37 @@ export const enhanceCharacterAPI = async (characterId, userInput, previousMessag
     }
 
     const data = await response.json();
+    
+    if (!data.response) {
+      console.error('Empty response from API:', data);
+      throw new Error('Received empty response from AI service');
+    }
 
     return {
-      response: data.response || "I'm having trouble responding right now.",
+      response: data.response,
       character: character,
-      source: 'api',
+      source: 'grok3-api',
     };
   } catch (error) {
     console.error('Error in enhanceCharacterAPI:', error);
-    return {
-      response: "I'm having trouble responding right now. Please try again later.",
-      error: error.message,
-    };
+    
+    // Provide a meaningful error message to the user
+    if (error.name === 'AbortError') {
+      return {
+        response: "I'm sorry, but the request timed out. Please try again in a moment.",
+        error: "Request timeout",
+      };
+    } else if (error.message.includes('not found')) {
+      return {
+        response: "I couldn't find this character in the database. Please refresh the page and try again.",
+        error: error.message,
+      };
+    } else {
+      return {
+        response: "I'm having trouble connecting to my knowledge base right now. Please try again in a few moments.",
+        error: error.message,
+      };
+    }
   }
 };
 

@@ -722,6 +722,86 @@ export function StorageProvider({ children }) {
       return false;
     }
   };
+  const refreshData = async (dataType) => {
+    if (!currentUser) {
+      setError('User not authenticated. Please log in.');
+      return false;
+    }
+  
+    setIsLoading(true);
+    try {
+      switch (dataType) {
+        case 'characters':
+          const characters = await loadCharacters(currentUser.uid);
+          setCachedData(prev => ({
+            ...prev,
+            characters,
+            lastFetched: {
+              ...prev.lastFetched,
+              characters: new Date()
+            }
+          }));
+          break;
+        case 'environments':
+          const environments = await loadEnvironments(currentUser.uid);
+          setCachedData(prev => ({
+            ...prev,
+            environments,
+            lastFetched: {
+              ...prev.lastFetched,
+              environments: new Date()
+            }
+          }));
+          break;
+        case 'worlds':
+          const worlds = await loadWorlds(currentUser.uid);
+          setCachedData(prev => ({
+            ...prev,
+            worlds,
+            lastFetched: {
+              ...prev.lastFetched,
+              worlds: new Date()
+            }
+          }));
+          break;
+        case 'campaigns':
+          // For campaigns, we need to reload each world's campaigns
+          const worldsForCampaigns = await loadWorlds(currentUser.uid);
+          let allCampaigns = [];
+          for (const world of worldsForCampaigns) {
+            const worldCampaigns = await loadWorldCampaigns(world.id, currentUser.uid);
+            allCampaigns = [...allCampaigns, ...worldCampaigns];
+          }
+          setCachedData(prev => ({
+            ...prev,
+            campaigns: allCampaigns,
+            lastFetched: {
+              ...prev.lastFetched,
+              campaigns: new Date()
+            }
+          }));
+          break;
+        case 'all':
+          // Reload all data types
+          await refreshData('characters');
+          await refreshData('environments');
+          await refreshData('worlds');
+          await refreshData('campaigns');
+          break;
+        default:
+          console.warn(`Unknown data type: ${dataType}`);
+          return false;
+      }
+      return true;
+    } catch (error) {
+      console.error(`Error refreshing ${dataType}:`, error);
+      setError(`Failed to refresh ${dataType}. Please try again.`);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
 
   const removeCampaign = async (campaignId) => {
     if (!currentUser) {
@@ -819,7 +899,8 @@ export function StorageProvider({ children }) {
     updateCampaign,
     updateCampaignSession,
     removeCampaign,
-    getWorldCampaigns
+    getWorldCampaigns,
+    refreshData 
   }), [
     currentUser,
     isLoading,

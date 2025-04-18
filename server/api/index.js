@@ -98,21 +98,29 @@ const handler = async (req, res) => {
 
     if (req.method === 'POST' && req.url === '/api/chat') {
       try {
-        const { messages, character, context } = req.body;
+        const { messages, character, context, useGrok3 = true, temperature = 0.7 } = req.body;
         if (!messages || !Array.isArray(messages) || !character) {
           res.status(400).json({ error: 'Messages and character are required' });
           return;
         }
-
-        // Construct messages for Grok API
-        const grokMessages = [
-          { role: 'system', content: `You are ${character}, a character in a roleplay game. Respond in character, using the following context and conversation history to inform your response.\n\n${context || ''}` },
-          ...messages.map(msg => ({
-            role: msg.role,
-            content: msg.content,
-          })),
-        ];
-
+    
+        console.log(`Processing chat request for character: ${character}`);
+        console.log(`Using Grok 3: ${useGrok3}`);
+        
+        // Use Grok 3 explicitly
+        const model = 'grok-3';
+        
+        // Construct system prompt if not provided in messages
+        let grokMessages = messages;
+        if (!messages.some(msg => msg.role === 'system') && context) {
+          grokMessages = [
+            { role: 'system', content: `You are ${character}, a character in a roleplay game. Respond in character, using the following context and conversation history to inform your response.\n\n${context}` },
+            ...messages
+          ];
+        }
+    
+        console.log(`Sending ${grokMessages.length} messages to Grok API`);
+        
         const response = await fetch('https://api.x.ai/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -120,19 +128,27 @@ const handler = async (req, res) => {
             'Authorization': `Bearer ${process.env.XAI_API_KEY}`,
           },
           body: JSON.stringify({
-            model: 'grok-3',
+            model: model,
             messages: grokMessages,
             max_tokens: 800,
-            temperature: 0.7,
+            temperature: temperature
           }),
         });
-
+    
         if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Grok API error:', errorText);
           throw new Error(`Grok API error: ${response.status} ${response.statusText}`);
         }
-
+    
         const data = await response.json();
-        res.status(200).json({ response: data.choices[0].message.content });
+        console.log('Received response from Grok API');
+        
+        res.status(200).json({ 
+          response: data.choices[0].message.content,
+          model: model,
+          success: true
+        });
       } catch (error) {
         console.error('Error in /api/chat endpoint:', { message: error.message, stack: error.stack });
         res.status(500).json({

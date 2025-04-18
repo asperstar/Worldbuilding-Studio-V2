@@ -70,13 +70,21 @@ function CharactersPage() {
     checkStorage();
   }, [testStorage]);
 
-  const loadCharacterData = useCallback(async (pageNum) => {
+  const loadCharacterData = useCallback(async (pageNum, forceRefresh = false) => {
     setIsLoading(true);
     setError(null);
     try {
       const t = trace(perf, 'load_characters');
       t.start();
-      const allCharacters = await getAllCharacters();
+      
+      // If we're forcing a refresh or this is the first page, mark that we're doing a full load
+      const isFullLoad = forceRefresh || pageNum === 1;
+      if (isFullLoad) {
+        console.log("Performing full character data refresh");
+      }
+      
+      // Get all characters or just the next page
+      const allCharacters = await getAllCharacters(isFullLoad);
       
       // Filter out draft characters or keep only the most recent version of each character
       const filteredCharacters = allCharacters.reduce((acc, char) => {
@@ -94,13 +102,18 @@ function CharactersPage() {
         return acc;
       }, []);
       
+      // Calculate pagination
       const startIndex = (pageNum - 1) * pageSize;
       const endIndex = startIndex + pageSize;
       const newCharacters = filteredCharacters.slice(startIndex, endIndex);
+      
+      // Update state based on whether this is the first page or a subsequent page
       if (pageNum === 1) {
+        console.log(`Loading first page of characters (${newCharacters.length})`);
         setCharacters(newCharacters);
         setFilteredCharacters(newCharacters);
       } else {
+        console.log(`Loading additional characters page ${pageNum} (${newCharacters.length})`);
         setCharacters(prev => {
           const combined = [...prev, ...newCharacters];
           const uniqueCharacters = Array.from(
@@ -116,12 +129,18 @@ function CharactersPage() {
           return uniqueCharacters;
         });
       }
-
-      setHasMore(endIndex < allCharacters.length);
+  
+      // Update "hasMore" flag based on whether there are more characters to load
+      const hasMoreCharacters = endIndex < filteredCharacters.length;
+      console.log(`Has more characters: ${hasMoreCharacters}`);
+      setHasMore(hasMoreCharacters);
+      
       t.stop();
+      return newCharacters.length > 0;
     } catch (error) {
       console.error("Error loading characters:", error);
       setError("Failed to load characters. Please try again.");
+      return false;
     } finally {
       setIsLoading(false);
     }
@@ -192,101 +211,106 @@ function CharactersPage() {
   // src/pages/CharactersPage.js
   // In CharactersPage.js, modify the handleSaveCharacter function:
 
-const handleSaveCharacter = async (newCharacter) => {
-  try {
-    setIsLoading(true);
-    setSaveError(null);
-    
-    // Check if character already exists with similar data to prevent duplicates
-    if (!editingCharacter && characters.some(c => c.name === newCharacter.name && !c.isDraft)) {
-      setSaveError(`A character named "${newCharacter.name}" already exists. Please use a different name.`);
-      setIsLoading(false);
-      return;
-    }
-    
-    // Process image if present
-    let imageUrl = newCharacter.imageUrl || '';
-    if (newCharacter.imageFile) {
-      try {
-        const userId = currentUser.uid;
-        const imageId = Date.now().toString();
-        const storageRef = ref(storage, `users/${userId}/characters/${imageId}`);
-        await uploadBytes(storageRef, newCharacter.imageFile);
-        imageUrl = await getDownloadURL(storageRef);
-      } catch (imageError) {
-        console.error("Error uploading image:", imageError);
-        setSaveError("Image upload failed, but character will be saved without image");
-      }
-    }
-
-    let updatedCharacter;
-    const characterId = editingCharacter ? 
-      editingCharacter.id.toString() : 
-      (draftCharacter ? draftCharacter.id : `char_${Date.now()}`);
+  const handleSaveCharacter = async (newCharacter) => {
+    try {
+      setIsLoading(true);
+      setSaveError(null);
       
-    updatedCharacter = {
-      ...newCharacter,
-      id: characterId,
-      imageUrl, // Use the uploaded URL
-      imageFile: null, // Don't store file in Firestore
-      created: editingCharacter ? editingCharacter.created : (draftCharacter ? draftCharacter.created : new Date().toISOString()),
-      updated: new Date().toISOString(),
-      userId: currentUser.uid,
-      isDraft: false,
-    };
-
-    // Save character
-    const saveResult = await debouncedSaveCharacter(updatedCharacter, currentUser.uid);
-    
-    if (saveResult) {
-      // If we had a draft, remove it from the list
-      if (draftCharacter) {
-        setCharacters(prev => prev.filter(c => c.id !== draftCharacter.id || !c.isDraft));
+      // Check if character already exists with similar data to prevent duplicates
+      if (!editingCharacter && characters.some(c => c.name === newCharacter.name && !c.isDraft)) {
+        setSaveError(`A character named "${newCharacter.name}" already exists. Please use a different name.`);
+        setIsLoading(false);
+        return;
       }
       
-      // Update UI state
-      if (editingCharacter) {
-        setCharacters(prevChars =>
-          prevChars.map(char => (char.id === editingCharacter.id ? updatedCharacter : char))
-        );
-      } else {
-        setCharacters(prevChars => {
-          // Ensure we're not adding a duplicate
-          const withoutDrafts = prevChars.filter(c => !(c.isDraft && c.name === updatedCharacter.name));
-          return [...withoutDrafts, updatedCharacter];
-        });
-      }
-      
-      // Reset form state
-      setEditingCharacter(null);
-      setDraftCharacter(null);
-      setHasUnsavedChanges(false);
-      setFormData({
-        name: '',
-        traits: '',
-        personality: '',
-        background: '',
-        imageUrl: '',
-      });
-      
-      // After saving, fetch the latest list to ensure we have fresh data
-      setTimeout(async () => {
+      // Process image if present
+      let imageUrl = newCharacter.imageUrl || '';
+      if (newCharacter.imageFile) {
         try {
-          const freshCharacters = await getAllCharacters();
-          setCharacters(freshCharacters);
-        } catch (err) {
-          console.error("Error refreshing character list:", err);
+          const userId = currentUser.uid;
+          const imageId = Date.now().toString();
+          const storageRef = ref(storage, `users/${userId}/characters/${imageId}`);
+          await uploadBytes(storageRef, newCharacter.imageFile);
+          imageUrl = await getDownloadURL(storageRef);
+        } catch (imageError) {
+          console.error("Error uploading image:", imageError);
+          setSaveError("Image upload failed, but character will be saved without image");
         }
-      }, 1000);
+      }
+  
+      let updatedCharacter;
+      const characterId = editingCharacter ? 
+        editingCharacter.id.toString() : 
+        (draftCharacter ? draftCharacter.id : `char_${Date.now()}`);
+        
+      updatedCharacter = {
+        ...newCharacter,
+        id: characterId,
+        imageUrl, // Use the uploaded URL
+        imageFile: null, // Don't store file in Firestore
+        created: editingCharacter ? editingCharacter.created : (draftCharacter ? draftCharacter.created : new Date().toISOString()),
+        updated: new Date().toISOString(),
+        userId: currentUser.uid,
+        isDraft: false,
+      };
+  
+      // Save character
+      const saveResult = await saveOneCharacter(updatedCharacter);
+      
+      if (saveResult) {
+        // If we had a draft, remove it from the list
+        if (draftCharacter) {
+          setCharacters(prev => prev.filter(c => c.id !== draftCharacter.id || !c.isDraft));
+        }
+        
+        // Update UI state
+        if (editingCharacter) {
+          setCharacters(prevChars =>
+            prevChars.map(char => (char.id === editingCharacter.id ? updatedCharacter : char))
+          );
+        } else {
+          setCharacters(prevChars => {
+            // Ensure we're not adding a duplicate
+            const withoutDrafts = prevChars.filter(c => !(c.isDraft && c.name === updatedCharacter.name));
+            return [...withoutDrafts, updatedCharacter];
+          });
+        }
+        
+        // Reset form state
+        setEditingCharacter(null);
+        setDraftCharacter(null);
+        setHasUnsavedChanges(false);
+        setFormData({
+          name: '',
+          traits: '',
+          personality: '',
+          background: '',
+          imageUrl: '',
+        });
+        
+        // Refresh data from server to ensure we have the latest
+        try {
+          // Add a slight delay to ensure Firestore has updated
+          setTimeout(async () => {
+            const freshCharacters = await getAllCharacters(true);
+            setCharacters(freshCharacters);
+            // Show a success message
+            setSaveError(null);
+            // You could add a success state/message here
+          }, 1000);
+        } catch (refreshError) {
+          console.error("Error refreshing character list:", refreshError);
+        }
+      } else {
+        setSaveError("Failed to save character. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error saving character:", error);
+      setSaveError(`Failed to save character: ${error.message}`);
+    } finally {
+      setIsLoading(false);
     }
-  } catch (error) {
-    console.error("Error saving character:", error);
-    setSaveError(`Failed to save character: ${error.message}`);
-  } finally {
-    setIsLoading(false);
-  }
-};
-
+  };
   
   const startEditing = (character) => {
     setEditingCharacter(character);
@@ -451,14 +475,21 @@ const handleDeleteCharacter = async (characterId) => {
                 ))}
               </ul>
               {hasMore && (
-                <button
-                  onClick={loadMoreCharacters}
-                  disabled={isLoading}
-                  className="load-more-button"
-                >
-                  {isLoading ? 'Loading...' : 'Load More'}
-                </button>
-              )}
+  <button
+    onClick={loadMoreCharacters}
+    disabled={isLoading}
+    className="load-more-button"
+  >
+    {isLoading ? (
+      <>
+        <span className="loading-spinner"></span>
+        Loading...
+      </>
+    ) : (
+      'Load More Characters'
+    )}
+  </button>
+)}
             </>
           )}
         </div>
