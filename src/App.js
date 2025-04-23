@@ -36,6 +36,8 @@ import AzgaarMapIframe from './components/maps/AzgaarMapIframe';
 import LoginPage from './pages/LoginPage'; // Change from 'pages/LoginPage'
 import WorldSelectionPage from './pages/WorldSelectionPage';
 import './styles/UpdatedChatPage.css';
+import ForumsPage from './pages/ForumsPage';
+import ForumPostDetailPage from './pages/ForumPostDetailPage';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -117,6 +119,8 @@ function App() {
                   <li><Link to="/profile" onClick={() => setIsSidebarOpen(false)}>Profile</Link></li>
                   <li><Link to="/documentation" onClick={() => setIsSidebarOpen(false)}>Documentation</Link></li>
                   <Link to="/diagnostics/ollama" className="feature-button">Run Diagnostics</Link>
+                  <li><Link to="/forums" onClick={() => setIsSidebarOpen(false)}>Forums</Link></li>
+
                 </ul>
               </nav>
 
@@ -144,6 +148,8 @@ function App() {
                     <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
                     <Route path="/documentation" element={<ProtectedRoute><DocumentationPage /></ProtectedRoute>} />
                     <Route path="/debug" element={<ProtectedRoute><DebugPage /></ProtectedRoute>} />
+                    <Route path="/forums" element={<ProtectedRoute><ForumsPage /></ProtectedRoute>} />
+<Route path="/forums/:postId" element={<ProtectedRoute><ForumPostDetailPage /></ProtectedRoute>} />
                   </Routes>
                 </ErrorSuppressor>
               </main>

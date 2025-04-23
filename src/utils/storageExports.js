@@ -326,6 +326,7 @@ export const loadCharacters = async (userId = null, projectId = null) => {
   }
 };
 
+// In saveCharacter function (storageExports.js)
 export const saveCharacter = async (character, userId = null) => {
   try {
     // Ensure we have a user ID
@@ -338,29 +339,20 @@ export const saveCharacter = async (character, userId = null) => {
     const characterId = character.id || `char_${Date.now()}`;
     character.id = characterId;
     
-    // Handle image upload if needed - but only if we have an actual File object
-    let imageUrl = character.imageUrl || '';
-    if (character.imageFile && character.imageFile instanceof File) {
-      try {
-        const storageRef = ref(storage, `users/${userIdToUse}/characters/${characterId}`);
-        await uploadBytes(storageRef, character.imageFile);
-        imageUrl = await getDownloadURL(storageRef);
-        
-        // Update the URL only if we successfully uploaded
-        console.log(`Successfully uploaded image for character ${characterId}, URL: ${imageUrl}`);
-      } catch (error) {
-        console.error(`Error uploading character image for ${characterId}:`, error);
-        // Continue without the image but don't override existing URL if any
-        if (!character.imageUrl) {
-          console.log('No existing image URL, continuing without image');
-        } else {
-          console.log('Keeping existing image URL:', character.imageUrl);
-          imageUrl = character.imageUrl;
-        }
+    // Standardize the collection path - ALWAYS use the same path
+    const characterRef = doc(db, `users/${userIdToUse}/characters`, characterId.toString());
+    
+    // Check if character already exists (by name) to prevent duplicates
+    if (!character.id) {
+      const charactersQuery = query(
+        collection(db, `users/${userIdToUse}/characters`),
+        where('name', '==', character.name),
+        where('isDraft', '==', false)
+      );
+      const existingCharacters = await getDocs(charactersQuery);
+      if (!existingCharacters.empty) {
+        throw new Error(`A character named "${character.name}" already exists`);
       }
-    } else if (character.imageUrl) {
-      console.log(`Using existing image URL for character ${characterId}: ${character.imageUrl}`);
-      imageUrl = character.imageUrl;
     }
     
     // Remove imageFile from what gets saved to Firestore
@@ -369,21 +361,12 @@ export const saveCharacter = async (character, userId = null) => {
     // Create a clean object to save to Firestore
     const cleanedCharacter = {
       ...characterToSave,
-      imageUrl, // Use our processed imageUrl
       userId: userIdToUse,
       updated: new Date().toISOString()
     };
     
-    // Ensure the document exists (to prevent duplicates)
-    const characterRef = doc(db, `users/${userIdToUse}/characters`, characterId.toString());
-    
-    console.log(`Saving character ${characterId} to Firestore:`, cleanedCharacter);
-    
-    // Save to Firestore
+    // Save to Firestore with merge to update rather than create duplicates
     await setDoc(characterRef, cleanedCharacter, { merge: true });
-    
-    // Add a small delay to ensure Firebase has time to update
-    await new Promise(resolve => setTimeout(resolve, 300));
     
     console.log(`Character ${characterId} saved successfully`);
     return true;

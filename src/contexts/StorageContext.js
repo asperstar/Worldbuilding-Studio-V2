@@ -1,121 +1,91 @@
-/* eslint-disable no-undef*/
-
-import React, { createContext, useState, useEffect, useContext, useMemo } from 'react';
+// src/contexts/StorageContext.js
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { auth } from '../firebase';
-import { onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
-import { db } from '../firebase';
-import {
+import { 
+  getForumPosts, 
+  getForumPost, 
+  addForumPost, 
+  updateForumPost, 
+  deleteForumPost, 
+  likeForumPost, 
+  unlikeForumPost, 
+  getPostReplies, 
+  addReplyToPost, 
+  updateReply, 
+  deleteReply, 
+  likeReply, 
+  unlikeReply,
   loadCharacters,
   saveCharacter,
+  deleteCharacter, 
   saveCharacters,
-  deleteCharacter,
-  loadEnvironments,
-  saveEnvironments,
+  loadWorldById,
   loadWorlds,
-  saveMapData,
-  loadMapData,
-  loadTimelineData,
-  saveTimelineData,
-  loadCampaign,
-  saveCampaign,
-  loadWorldCampaigns,
-  testStorage,
+  saveWorld,
+  saveWorlds,
   deleteWorld,
+  getEnvironments,
+  loadEnvironments,
+  saveEnvironment,
+  saveEnvironments,
   deleteEnvironment,
+  getMapData,
+  saveMapData,
+  getTimelineData,
+  saveTimelineData,
+  loadWorldCampaigns,
+  getCampaignById,
+  saveCampaign,
   deleteCampaign,
-} from '../utils/storageExports';
+  updateCampaignSession,
+  importAllData,
+  exportAllData,
+  testStorage,
+  getUserProfile,
+  updateUserProfile,
+  sendPasswordReset
+} from '../utils/firebaseStorage';
 
 const StorageContext = createContext();
 
+export function useStorage() {
+  return useContext(StorageContext);
+}
+
 export function StorageProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [firebaseStatus, setFirebaseStatus] = useState({ tested: false, working: false });
-  const [cachedData, setCachedData] = useState({
-    characters: null,
-    environments: null,
-    worlds: null,
-    campaigns: null,
-    lastFetched: {
-      characters: null,
-      environments: null,
-      worlds: null,
-      campaigns: null,
-    }
-  });
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      (user) => {
-        console.log('onAuthStateChanged: User state:', user);
-        setCurrentUser(user);
-        setIsLoading(false);
-      },
-      (authError) => {
-        console.error('onAuthStateChanged error:', authError);
-        setError(authError.message);
-        setIsLoading(false);
-      }
-    );
+    const unsubscribe = auth.onAuthStateChanged(user => {
+      setCurrentUser(user);
+      setLoading(false);
+    });
 
     return unsubscribe;
   }, []);
 
-  const testFirebaseConnection = async () => {
+  // Authentication functions
+  const login = async (email, password) => {
     try {
-      const result = await testStorage();
-      setFirebaseStatus((prev) => ({
-        ...prev,
-        tested: true,
-        working: result.success
-      }));
-
-      if (!result.success) {
-        console.error('Firebase connection test failed:', result.error);
-        setError(`Firebase connection error: ${result.error}`);
-      } else {
-        setError(null);
-      }
-      return result.success;
+      setError(null);
+      await auth.signInWithEmailAndPassword(email, password);
+      return true;
     } catch (err) {
-      console.error('Error during Firebase connection test:', err);
-      setFirebaseStatus((prev) => ({
-        ...prev,
-        tested: true,
-        working: false
-      }));
-      setError(`Failed to test Firebase connection: ${err.message}`);
+      console.error("Login error:", err);
+      setError(getAuthErrorMessage(err.code));
       return false;
     }
   };
 
-  const login = async (email, password) => {
+  const logout = async () => {
     try {
-      setError(null);
-      await signInWithEmailAndPassword(auth, email, password);
-      await testFirebaseConnection();
+      await auth.signOut();
       return true;
-    } catch (error) {
-      let errorMessage = 'Authentication failed';
-      switch (error.code) {
-        case 'auth/invalid-email':
-          errorMessage = 'Invalid email address format.';
-          break;
-        case 'auth/user-disabled':
-          errorMessage = 'This account has been disabled.';
-          break;
-        case 'auth/user-not-found':
-          errorMessage = 'No account found with this email.';
-          break;
-        case 'auth/wrong-password':
-          errorMessage = 'Incorrect password.';
-          break;
-        default:
-          errorMessage = error.message || 'Authentication failed';
-      }
-      setError(errorMessage);
+    } catch (err) {
+      console.error("Logout error:", err);
+      setError(err.message);
       return false;
     }
   };
@@ -123,798 +93,517 @@ export function StorageProvider({ children }) {
   const signup = async (email, password) => {
     try {
       setError(null);
-      await createUserWithEmailAndPassword(auth, email, password);
-      await testFirebaseConnection();
+      await auth.createUserWithEmailAndPassword(email, password);
       return true;
-    } catch (error) {
-      let errorMessage = 'Registration failed';
-      switch (error.code) {
-        case 'auth/email-already-in-use':
-          errorMessage = 'This email is already in use.';
-          break;
-        case 'auth/invalid-email':
-          errorMessage = 'Invalid email address format.';
-          break;
-        case 'auth/weak-password':
-          errorMessage = 'Password is too weak. Please use at least 6 characters.';
-          break;
-        default:
-          errorMessage = error.message || 'Registration failed';
-      }
-      setError(errorMessage);
+    } catch (err) {
+      console.error("Signup error:", err);
+      setError(getAuthErrorMessage(err.code));
       return false;
     }
   };
 
-  const logout = async () => {
+  // Helper function to get better error messages
+  const getAuthErrorMessage = (errorCode) => {
+    switch (errorCode) {
+      case 'auth/invalid-email':
+        return 'Invalid email address format.';
+      case 'auth/user-disabled':
+        return 'This account has been disabled.';
+      case 'auth/user-not-found':
+        return 'No account found with this email.';
+      case 'auth/wrong-password':
+        return 'Incorrect password.';
+      case 'auth/email-already-in-use':
+        return 'This email is already in use by another account.';
+      case 'auth/weak-password':
+        return 'Password is too weak. Please use at least 6 characters.';
+      case 'auth/network-request-failed':
+        return 'Network error. Please check your connection.';
+      default:
+        return errorCode ? errorCode : 'An error occurred during authentication.';
+    }
+  };
+
+  // Password reset function
+  const resetPassword = async (email) => {
     try {
       setError(null);
-      await signOut(auth);
-      setCachedData({
-        characters: null,
-        environments: null,
-        worlds: null,
-        campaigns: null,
-        lastFetched: {
-          characters: null,
-          environments: null,
-          worlds: null,
-          campaigns: null,
-        }
-      });
+      await sendPasswordReset(email);
       return true;
-    } catch (error) {
-      setError(`Logout error: ${error.message}`);
+    } catch (err) {
+      console.error("Password reset error:", err);
+      setError(err.message);
       return false;
     }
   };
 
-  const sendPasswordReset = async (email) => {
-    try {
-      setError(null);
-      await sendPasswordResetEmail(auth, email);
-      return true;
-    } catch (error) {
-      let errorMessage = 'Failed to send password reset email';
-      switch (error.code) {
-        case 'auth/invalid-email':
-          errorMessage = 'Invalid email address format.';
-          break;
-        case 'auth/user-not-found':
-          errorMessage = 'No account found with this email.';
-          break;
-        default:
-          errorMessage = error.message || 'Failed to send password reset email';
-      }
-      setError(errorMessage);
-      return false;
-    }
-  };
-
-  const getCharacters = async (projectId, forceRefresh = false) => {
-    if (!currentUser) {
-      setError('User not authenticated. Please log in.');
-      return [];
-    }
-
-    const now = new Date();
-    const cacheExpiry = 5 * 60 * 1000;
-
-    if (
-      !forceRefresh &&
-      cachedData.characters &&
-      cachedData.lastFetched.characters &&
-      now - cachedData.lastFetched.characters < cacheExpiry
-    ) {
-      return cachedData.characters;
-    }
-
-    try {
-      const characters = await loadCharacters(currentUser.uid, projectId || null);
-      setCachedData(prev => ({
-        ...prev,
-        characters,
-        lastFetched: {
-          ...prev.lastFetched,
-          characters: now
-        }
-      }));
-      return characters;
-    } catch (error) {
-      console.error('Error fetching characters:', error);
-      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
-        setError('Authentication error. Please log in again.');
-      } else if (error.code === 'unavailable') {
-        setError('Network error. Please check your internet connection and try again.');
-      } else {
-        setError('Failed to fetch characters. Please try again.');
-      }
-      return [];
-    }
-  };
-
+  // Character functions
   const getAllCharacters = async (forceRefresh = false) => {
-    return getCharacters(null, forceRefresh);
+    try {
+      if (!currentUser) throw new Error('User not authenticated');
+      return await loadCharacters(currentUser.uid);
+    } catch (err) {
+      setError(err.message);
+      return [];
+    }
   };
 
-  const saveAllCharacters = async (characters) => {
-    if (!currentUser) {
-      setError('User not authenticated. Please log in.');
-      return false;
-    }
+  const getCharacters = async (userId = null, projectId = null) => {
     try {
-      await saveCharacters(characters, currentUser.uid);
-      setCachedData(prev => ({
-        ...prev,
-        characters,
-        lastFetched: {
-          ...prev.lastFetched,
-          characters: new Date()
-        }
-      }));
-      return true;
-    } catch (error) {
-      console.error('Error saving characters:', error);
-      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
-        setError('Authentication error. Please log in again.');
-      } else {
-        setError('Failed to save characters. Please try again.');
-      }
-      return false;
+      const userIdToUse = userId || (currentUser ? currentUser.uid : null);
+      if (!userIdToUse) throw new Error('User not authenticated');
+      return await loadCharacters(userIdToUse, projectId);
+    } catch (err) {
+      setError(err.message);
+      return [];
     }
   };
 
   const saveOneCharacter = async (character) => {
-    if (!currentUser) {
-      setError('User not authenticated. Please log in.');
-      console.error('saveOneCharacter: No authenticated user');
-      return false;
-    }
     try {
-      console.log('saveOneCharacter: Saving character with data:', character);
-      console.log('saveOneCharacter: Authenticated user UID:', currentUser.uid);
-      await saveCharacter(character, currentUser.uid);
-      if (cachedData.characters) {
-        const updatedCharacters = [...cachedData.characters];
-        const index = updatedCharacters.findIndex(c => c.id === character.id);
-        if (index >= 0) {
-          updatedCharacters[index] = character;
-        } else {
-          updatedCharacters.push(character);
-        }
-        setCachedData(prev => ({
-          ...prev,
-          characters: updatedCharacters,
-          lastFetched: {
-            ...prev.lastFetched,
-            characters: new Date()
-          }
-        }));
-      } else {
-        setCachedData(prev => ({
-          ...prev,
-          lastFetched: {
-            ...prev.lastFetched,
-            characters: null // Invalidate cache
-          }
-        }));
-      }
-      return true;
-    } catch (error) {
-      console.error('Error saving character:', error);
-      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
-        setError('Authentication error. Please log in again.');
-      } else {
-        setError('Failed to save character. Please try again.');
-      }
-      return false;
+      if (!currentUser) throw new Error('User not authenticated');
+      return await saveCharacter(character, currentUser.uid);
+    } catch (err) {
+      setError(err.message);
+      throw err;
     }
   };
 
-  const removeCharacter = async (characterId) => {
-    if (!currentUser) {
-      setError('User not authenticated. Please log in.');
-      return false;
-    }
+  const deleteOneCharacter = async (characterId) => {
     try {
-      await deleteCharacter(characterId, currentUser.uid);
-      if (cachedData.characters) {
-        setCachedData(prev => ({
-          ...prev,
-          characters: prev.characters.filter(c => c.id !== characterId),
-          lastFetched: {
-            ...prev.lastFetched,
-            characters: new Date()
-          }
-        }));
-      } else {
-        setCachedData(prev => ({
-          ...prev,
-          lastFetched: {
-            ...prev.lastFetched,
-            characters: null // Invalidate cache
-          }
-        }));
-      }
-      return true;
-    } catch (error) {
-      console.error('Error deleting character:', error);
-      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
-        setError('Authentication error. Please log in again.');
-      } else {
-        setError('Failed to delete character. Please try again.');
-      }
-      return false;
+      if (!currentUser) throw new Error('User not authenticated');
+      return await deleteCharacter(characterId, currentUser.uid);
+    } catch (err) {
+      setError(err.message);
+      throw err;
     }
   };
 
-  const getEnvironments = async (projectId, forceRefresh = false) => {
-    if (!currentUser) {
-      setError('User not authenticated. Please log in.');
+  // World functions
+  const getWorlds = async () => {
+    try {
+      if (!currentUser) throw new Error('User not authenticated');
+      return await loadWorlds(currentUser.uid);
+    } catch (err) {
+      setError(err.message);
       return [];
-    }
-
-    const now = new Date();
-    const cacheExpiry = 5 * 60 * 1000;
-
-    if (
-      !forceRefresh &&
-      cachedData.environments &&
-      cachedData.lastFetched.environments &&
-      now - cachedData.lastFetched.environments < cacheExpiry
-    ) {
-      return cachedData.environments;
-    }
-
-    try {
-      const environments = await loadEnvironments(currentUser.uid, projectId || null);
-      setCachedData(prev => ({
-        ...prev,
-        environments,
-        lastFetched: {
-          ...prev.lastFetched,
-          environments: now
-        }
-      }));
-      return environments;
-    } catch (error) {
-      console.error('Error fetching environments:', error);
-      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
-        setError('Authentication error. Please log in again.');
-      } else if (error.code === 'unavailable') {
-        setError('Network error. Please check your internet connection and try again.');
-      } else {
-        setError('Failed to fetch environments. Please try again.');
-      }
-      return [];
-    }
-  };
-
-  const getAllEnvironments = async (forceRefresh = false) => {
-    return getEnvironments(null, forceRefresh);
-  };
-
-  const saveAllEnvironments = async (environments) => {
-    if (!currentUser) {
-      setError('User not authenticated. Please log in.');
-      return false;
-    }
-    try {
-      await saveEnvironments(environments, currentUser.uid);
-      setCachedData(prev => ({
-        ...prev,
-        environments,
-        lastFetched: {
-          ...prev.lastFetched,
-          environments: new Date()
-        }
-      }));
-      return true;
-    } catch (error) {
-      console.error('Error saving environments:', error);
-      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
-        setError('Authentication error. Please log in again.');
-      } else {
-        setError('Failed to save environments. Please try again.');
-      }
-      return false;
-    }
-  };
-
-  const removeEnvironment = async (environmentId) => {
-    if (!currentUser) {
-      setError('User not authenticated. Please log in.');
-      return false;
-    }
-    try {
-      await deleteEnvironment(environmentId, currentUser.uid);
-      if (cachedData.environments) {
-        setCachedData(prev => ({
-          ...prev,
-          environments: prev.environments.filter(e => e.id !== environmentId),
-          lastFetched: {
-            ...prev.lastFetched,
-            environments: new Date()
-          }
-        }));
-      } else {
-        setCachedData(prev => ({
-          ...prev,
-          lastFetched: {
-            ...prev.lastFetched,
-            environments: null // Invalidate cache
-          }
-        }));
-      }
-      return true;
-    } catch (error) {
-      console.error('Error deleting environment:', error);
-      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
-        setError('Authentication error. Please log in again.');
-      } else {
-        setError('Failed to delete environment. Please try again.');
-      }
-      return false;
     }
   };
 
   const getWorldById = async (worldId) => {
-    if (!currentUser) {
-      setError('User not authenticated. Please log in.');
-      return null;
-    }
     try {
-      const worlds = await loadWorlds(currentUser.uid);
-      const world = worlds.find(w => w.id === worldId);
-      return world || null;
-    } catch (error) {
-      console.error('Error fetching world by ID:', error);
-      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
-        setError('Authentication error. Please log in again.');
-      } else {
-        setError('Failed to fetch world. Please try again.');
-      }
+      if (!currentUser) throw new Error('User not authenticated');
+      return await loadWorldById(worldId, currentUser.uid);
+    } catch (err) {
+      setError(err.message);
       return null;
     }
   };
 
-  const getWorlds = async (forceRefresh = false) => {
-    if (!currentUser) {
-      setError('User not authenticated. Please log in.');
-      return [];
-    }
-
-    const now = new Date();
-    const cacheExpiry = 5 * 60 * 1000;
-
-    if (
-      !forceRefresh &&
-      cachedData.worlds &&
-      cachedData.lastFetched.worlds &&
-      now - cachedData.lastFetched.worlds < cacheExpiry
-    ) {
-      return cachedData.worlds;
-    }
-
+  const saveOneWorld = async (world) => {
     try {
-      const worlds = await loadWorlds(currentUser.uid);
-      setCachedData(prev => ({
-        ...prev,
-        worlds,
-        lastFetched: {
-          ...prev.lastFetched,
-          worlds: now
-        }
-      }));
-      return worlds;
-    } catch (error) {
-      console.error('Error fetching worlds:', error);
-      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
-        setError('Authentication error. Please log in again.');
-      } else if (error.code === 'unavailable') {
-        setError('Network error. Please check your internet connection and try again.');
-      } else {
-        setError('Failed to fetch worlds. Please try again.');
-      }
+      if (!currentUser) throw new Error('User not authenticated');
+      return await saveWorld(world, currentUser.uid);
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  const deleteOneWorld = async (worldId) => {
+    try {
+      if (!currentUser) throw new Error('User not authenticated');
+      return await deleteWorld(worldId, currentUser.uid);
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  // Environment functions
+  const getAllEnvironments = async (forceRefresh = false) => {
+    try {
+      if (!currentUser) throw new Error('User not authenticated');
+      return await loadEnvironments(currentUser.uid);
+    } catch (err) {
+      setError(err.message);
       return [];
     }
   };
 
-  const removeWorld = async (worldId) => {
-    if (!currentUser) {
-      setError('User not authenticated. Please log in.');
-      return false;
-    }
+  const getEnvironmentById = async (environmentId) => {
     try {
-      await deleteWorld(worldId, currentUser.uid);
-      if (cachedData.worlds) {
-        setCachedData(prev => ({
-          ...prev,
-          worlds: prev.worlds.filter(w => w.id !== worldId),
-          lastFetched: {
-            ...prev.lastFetched,
-            worlds: new Date()
-          }
-        }));
-      } else {
-        setCachedData(prev => ({
-          ...prev,
-          lastFetched: {
-            ...prev.lastFetched,
-            worlds: null // Invalidate cache
-          }
-        }));
-      }
-      return true;
-    } catch (error) {
-      console.error('Error deleting world:', error);
-      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
-        setError('Authentication error. Please log in again.');
-      } else {
-        setError('Failed to delete world. Please try again.');
-      }
-      return false;
-    }
-  };
-
-  const getMapData = async () => {
-    if (!currentUser) {
-      setError('User not authenticated. Please log in.');
-      return { nodes: [], edges: [] };
-    }
-
-    try {
-      const mapData = await loadMapData(currentUser.uid);
-      console.log('Map data fetched in getMapData:', mapData);
-      return mapData;
-    } catch (error) {
-      console.error('Error loading map data:', error);
-      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
-        setError('Authentication error. Please log in again.');
-      } else {
-        setError('Failed to load map data. Please try again.');
-      }
-      return { nodes: [], edges: [], imageUrl: '' };
-    }
-  };
-
-  const updateMapData = async (mapData) => {
-    if (!currentUser) {
-      setError('User not authenticated. Please log in.');
-      return false;
-    }
-
-    try {
-      return await saveMapData(currentUser.uid, mapData);
-    } catch (error) {
-      console.error('Error saving map data:', error);
-      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
-        setError('Authentication error. Please log in again.');
-      } else {
-        setError('Failed to save map data. Please try again.');
-      }
-      return false;
-    }
-  };
-
-  const getTimelineData = async () => {
-    if (!currentUser) {
-      setError('User not authenticated. Please log in.');
-      return { events: [], sequences: ['Main Timeline'] };
-    }
-
-    try {
-      return await loadTimelineData(currentUser.uid);
-    } catch (error) {
-      console.error('Error loading timeline data:', error);
-      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
-        setError('Authentication error. Please log in again.');
-      } else {
-        setError('Failed to load timeline data. Please try again.');
-      }
-      return { events: [], sequences: ['Main Timeline'] };
-    }
-  };
-
-  const updateTimelineData = async (timelineData) => {
-    if (!currentUser) {
-      setError('User not authenticated. Please log in.');
-      return false;
-    }
-
-    try {
-      return await saveTimelineData(currentUser.uid, timelineData);
-    } catch (error) {
-      console.error('Error saving timeline data:', error);
-      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
-        setError('Authentication error. Please log in again.');
-      } else {
-        setError('Failed to save timeline data. Please try again.');
-      }
-      return false;
-    }
-  };
-
-  const getCampaignById = async (campaignId) => {
-    if (!currentUser) {
-      setError('User not authenticated. Please log in.');
+      if (!currentUser) throw new Error('User not authenticated');
+      const environments = await loadEnvironments(currentUser.uid);
+      return environments.find(env => env.id === environmentId) || null;
+    } catch (err) {
+      setError(err.message);
       return null;
     }
+  };
 
+  const saveOneEnvironment = async (environment) => {
     try {
-      return await loadCampaign(campaignId, currentUser.uid);
-    } catch (error) {
-      console.error(`Error loading campaign ${campaignId}:`, error);
-      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
-        setError('Authentication error. Please log in again.');
-      } else {
-        setError('Failed to load campaign. Please try again.');
-      }
+      if (!currentUser) throw new Error('User not authenticated');
+      return await saveEnvironment(environment, currentUser.uid);
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  const deleteOneEnvironment = async (environmentId) => {
+    try {
+      if (!currentUser) throw new Error('User not authenticated');
+      return await deleteEnvironment(environmentId, currentUser.uid);
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  // Campaign functions
+  const getWorldCampaigns = async (worldId) => {
+    try {
+      if (!currentUser) throw new Error('User not authenticated');
+      return await loadWorldCampaigns(worldId, currentUser.uid);
+    } catch (err) {
+      setError(err.message);
+      return [];
+    }
+  };
+
+  const getCampaign = async (campaignId) => {
+    try {
+      if (!currentUser) throw new Error('User not authenticated');
+      return await getCampaignById(campaignId, currentUser.uid);
+    } catch (err) {
+      setError(err.message);
       return null;
     }
   };
 
   const updateCampaign = async (campaign) => {
-    if (!currentUser) {
-      setError('User not authenticated. Please log in.');
-      console.error('updateCampaign: No authenticated user');
-      return false;
-    }
     try {
-      console.log('updateCampaign: Saving campaign with data:', campaign);
-      console.log('updateCampaign: Authenticated user UID:', currentUser.uid);
-      const success = await saveCampaign(campaign, currentUser.uid);
-      setCachedData(prev => ({
-        ...prev,
-        lastFetched: {
-          ...prev.lastFetched,
-          campaigns: null // Invalidate cache
-        }
-      }));
-      return success;
-    } catch (error) {
-      console.error('Error saving campaign:', error);
-      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
-        setError('Authentication error. Please log in again.');
-      } else {
-        setError('Failed to save campaign. Please try again.');
-      }
+      if (!currentUser) throw new Error('User not authenticated');
+      return await saveCampaign(campaign, currentUser.uid);
+    } catch (err) {
+      setError(err.message);
       return false;
     }
   };
 
-  const updateCampaignSession = async (campaignId, sessionMessages) => {
-    if (!currentUser) {
-      setError('User not authenticated. Please log in.');
-      console.error('updateCampaignSession: No authenticated user');
-      return false;
-    }
+  const deleteCampaignById = async (campaignId) => {
     try {
-      console.log('updateCampaignSession: Updating campaign with ID:', campaignId);
-      console.log('updateCampaignSession: Session messages:', sessionMessages);
-      const campaign = await loadCampaign(campaignId, currentUser.uid);
-      if (!campaign) {
-        throw new Error('Campaign not found');
-      }
-      const updatedCampaign = {
-        ...campaign,
-        sessionMessages,
-        updated: new Date().toISOString(),
-        userId: currentUser.uid
-      };
-      await saveCampaign(updatedCampaign, currentUser.uid);
-      setCachedData(prev => ({
-        ...prev,
-        lastFetched: {
-          ...prev.lastFetched,
-          campaigns: null // Invalidate cache
-        }
-      }));
-      console.log(`Campaign session ${campaignId} updated successfully`);
-      return true;
-    } catch (error) {
-      console.error('Error updating campaign session:', error);
-      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
-        setError('Authentication error. Please log in again.');
-      } else {
-        setError('Failed to update campaign session. Please try again.');
-      }
+      if (!currentUser) throw new Error('User not authenticated');
+      return await deleteCampaign(campaignId, currentUser.uid);
+    } catch (err) {
+      setError(err.message);
       return false;
     }
   };
-  const refreshData = async (dataType) => {
-    if (!currentUser) {
-      setError('User not authenticated. Please log in.');
+
+  const updateCampaignSessionMessages = async (campaignId, messages) => {
+    try {
+      if (!currentUser) throw new Error('User not authenticated');
+      return await updateCampaignSession(campaignId, messages, currentUser.uid);
+    } catch (err) {
+      setError(err.message);
       return false;
     }
+  };
+
+  // Map and Timeline functions
+  const loadMapData = async () => {
+    try {
+      if (!currentUser) throw new Error('User not authenticated');
+      return await getMapData(currentUser.uid);
+    } catch (err) {
+      setError(err.message);
+      return { nodes: [], edges: [] };
+    }
+  };
+
+  const saveMap = async (mapData) => {
+    try {
+      if (!currentUser) throw new Error('User not authenticated');
+      return await saveMapData(currentUser.uid, mapData);
+    } catch (err) {
+      setError(err.message);
+      return false;
+    }
+  };
+
+  const loadTimelineData = async () => {
+    try {
+      if (!currentUser) throw new Error('User not authenticated');
+      return await getTimelineData(currentUser.uid);
+    } catch (err) {
+      setError(err.message);
+      return { events: [], sequences: ['Main Timeline'] };
+    }
+  };
+
+  const saveTimeline = async (timelineData) => {
+    try {
+      if (!currentUser) throw new Error('User not authenticated');
+      return await saveTimelineData(currentUser.uid, timelineData);
+    } catch (err) {
+      setError(err.message);
+      return false;
+    }
+  };
+
+  // User profile functions
+  const getProfile = async () => {
+    try {
+      if (!currentUser) throw new Error('User not authenticated');
+      return await getUserProfile(currentUser.uid);
+    } catch (err) {
+      setError(err.message);
+      return null;
+    }
+  };
+
+  const updateProfile = async (profileData) => {
+    try {
+      if (!currentUser) throw new Error('User not authenticated');
+      return await updateUserProfile(profileData, currentUser.uid);
+    } catch (err) {
+      setError(err.message);
+      return false;
+    }
+  };
+
+  // Export/Import functions
+  const exportData = async (options) => {
+    try {
+      if (!currentUser) throw new Error('User not authenticated');
+      return await exportAllData(options);
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  const importData = async (data) => {
+    try {
+      if (!currentUser) throw new Error('User not authenticated');
+      return await importAllData(data, currentUser.uid);
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  // Diagnostics functions
+  const testStorageConnection = async () => {
+    try {
+      return await testStorage();
+    } catch (err) {
+      setError(err.message);
+      return { success: false, error: err.message };
+    }
+  };
+
+  // Forum functions
+const getForumPostsFunc = async (forumId = 'general') => {
+  try {
+    if (!currentUser) throw new Error('User not authenticated');
+    return await getForumPosts(forumId, currentUser.uid);
+  } catch (err) {
+    setError(err.message);
+    throw err;
+  }
+};
+
+const getForumPostFunc = async (forumId = 'general', postId) => {
+  try {
+    if (!currentUser) throw new Error('User not authenticated');
+    return await getForumPost(forumId, postId, currentUser.uid);
+  } catch (err) {
+    setError(err.message);
+    throw err;
+  }
+};
+
+const addForumPostFunc = async (forumId = 'general', postData) => {
+  try {
+    if (!currentUser) throw new Error('User not authenticated');
+    return await addForumPost(forumId, postData, currentUser.uid);
+  } catch (err) {
+    setError(err.message);
+    throw err;
+  }
+};
+
+const updateForumPostFunc = async (forumId = 'general', postId, postData) => {
+  try {
+    if (!currentUser) throw new Error('User not authenticated');
+    return await updateForumPost(forumId, postId, postData, currentUser.uid);
+  } catch (err) {
+    setError(err.message);
+    throw err;
+  }
+};
+
+const deleteForumPostFunc = async (forumId = 'general', postId) => {
+  try {
+    if (!currentUser) throw new Error('User not authenticated');
+    return await deleteForumPost(forumId, postId, currentUser.uid);
+  } catch (err) {
+    setError(err.message);
+    throw err;
+  }
+};
+
+const likeForumPostFunc = async (forumId = 'general', postId) => {
+  try {
+    if (!currentUser) throw new Error('User not authenticated');
+    return await likeForumPost(forumId, postId, currentUser.uid);
+  } catch (err) {
+    setError(err.message);
+    throw err;
+  }
+};
+
+const unlikeForumPostFunc = async (forumId = 'general', postId) => {
+  try {
+    if (!currentUser) throw new Error('User not authenticated');
+    return await unlikeForumPost(forumId, postId, currentUser.uid);
+  } catch (err) {
+    setError(err.message);
+    throw err;
+  }
+};
+
+const getPostRepliesFunc = async (forumId = 'general', postId) => {
+  try {
+    if (!currentUser) throw new Error('User not authenticated');
+    return await getPostReplies(forumId, postId, currentUser.uid);
+  } catch (err) {
+    setError(err.message);
+    throw err;
+  }
+};
+
+const addReplyToPostFunc = async (forumId = 'general', postId, replyData) => {
+  try {
+    if (!currentUser) throw new Error('User not authenticated');
+    return await addReplyToPost(forumId, postId, replyData, currentUser.uid);
+  } catch (err) {
+    setError(err.message);
+    throw err;
+  }
+};
+
+const updateReplyFunc = async (forumId = 'general', postId, replyId, replyData) => {
+  try {
+    if (!currentUser) throw new Error('User not authenticated');
+    return await updateReply(forumId, postId, replyId, replyData, currentUser.uid);
+  } catch (err) {
+    setError(err.message);
+    throw err;
+  }
+};
+
+const deleteReplyFunc = async (forumId = 'general', postId, replyId) => {
+  try {
+    if (!currentUser) throw new Error('User not authenticated');
+    return await deleteReply(forumId, postId, replyId, currentUser.uid);
+  } catch (err) {
+    setError(err.message);
+    throw err;
+  }
+};
+
+const likeReplyFunc = async (forumId = 'general', postId, replyId) => {
+  try {
+    if (!currentUser) throw new Error('User not authenticated');
+    return await likeReply(forumId, postId, replyId, currentUser.uid);
+  } catch (err) {
+    setError(err.message);
+    throw err;
+  }
+};
+
+const unlikeReplyFunc = async (forumId = 'general', postId, replyId) => {
+  try {
+    if (!currentUser) throw new Error('User not authenticated');
+    return await unlikeReply(forumId, postId, replyId, currentUser.uid);
+  } catch (err) {
+    setError(err.message);
+    throw err;
+  }
+};
+const contextValue = {
+  currentUser,
+  login,
+  logout,
+  signup,
+  resetPassword,
+  error,
   
-    setIsLoading(true);
-    try {
-      switch (dataType) {
-        case 'characters':
-          const characters = await loadCharacters(currentUser.uid);
-          setCachedData(prev => ({
-            ...prev,
-            characters,
-            lastFetched: {
-              ...prev.lastFetched,
-              characters: new Date()
-            }
-          }));
-          break;
-        case 'environments':
-          const environments = await loadEnvironments(currentUser.uid);
-          setCachedData(prev => ({
-            ...prev,
-            environments,
-            lastFetched: {
-              ...prev.lastFetched,
-              environments: new Date()
-            }
-          }));
-          break;
-        case 'worlds':
-          const worlds = await loadWorlds(currentUser.uid);
-          setCachedData(prev => ({
-            ...prev,
-            worlds,
-            lastFetched: {
-              ...prev.lastFetched,
-              worlds: new Date()
-            }
-          }));
-          break;
-        case 'campaigns':
-          // For campaigns, we need to reload each world's campaigns
-          const worldsForCampaigns = await loadWorlds(currentUser.uid);
-          let allCampaigns = [];
-          for (const world of worldsForCampaigns) {
-            const worldCampaigns = await loadWorldCampaigns(world.id, currentUser.uid);
-            allCampaigns = [...allCampaigns, ...worldCampaigns];
-          }
-          setCachedData(prev => ({
-            ...prev,
-            campaigns: allCampaigns,
-            lastFetched: {
-              ...prev.lastFetched,
-              campaigns: new Date()
-            }
-          }));
-          break;
-        case 'all':
-          // Reload all data types
-          await refreshData('characters');
-          await refreshData('environments');
-          await refreshData('worlds');
-          await refreshData('campaigns');
-          break;
-        default:
-          console.warn(`Unknown data type: ${dataType}`);
-          return false;
-      }
-      return true;
-    } catch (error) {
-      console.error(`Error refreshing ${dataType}:`, error);
-      setError(`Failed to refresh ${dataType}. Please try again.`);
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-
-  const removeCampaign = async (campaignId) => {
-    if (!currentUser) {
-      setError('User not authenticated. Please log in.');
-      return false;
-    }
-    try {
-      await deleteCampaign(campaignId, currentUser.uid);
-      setCachedData(prev => ({
-        ...prev,
-        lastFetched: {
-          ...prev.lastFetched,
-          campaigns: null // Invalidate cache
-        }
-      }));
-      return true;
-    } catch (error) {
-      console.error('Error deleting campaign:', error);
-      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
-        setError('Authentication error. Please log in again.');
-      } else {
-        setError('Failed to delete campaign. Please try again.');
-      }
-      return false;
-    }
-  };
-
-  const getWorldCampaigns = async (worldId, forceRefresh = false) => {
-    if (!currentUser) {
-      setError('User not authenticated. Please log in.');
-      return [];
-    }
-
-    const now = new Date();
-    const cacheExpiry = 5 * 60 * 1000;
-
-    if (
-      !forceRefresh &&
-      cachedData.campaigns &&
-      cachedData.lastFetched.campaigns &&
-      now - cachedData.lastFetched.campaigns < cacheExpiry
-    ) {
-      return cachedData.campaigns;
-    }
-
-    try {
-      const campaigns = await loadWorldCampaigns(worldId, currentUser.uid);
-      setCachedData(prev => ({
-        ...prev,
-        campaigns,
-        lastFetched: {
-          ...prev.lastFetched,
-          campaigns: now
-        }
-      }));
-      return campaigns;
-    } catch (error) {
-      console.error(`Error loading campaigns for world ${worldId}:`, error);
-      if (error.message.includes('not authenticated') || error.message.includes('Missing or insufficient permissions')) {
-        setError('Authentication error. Please log in again.');
-      } else {
-        setError('Failed to load campaigns for world. Please try again.');
-      }
-      return [];
-    }
-  };
-
-  const value = useMemo(() => ({
-    currentUser,
-    isLoading,
-    error,
-    firebaseStatus,
-    testFirebaseConnection,
-    login,
-    signup,
-    logout,
-    sendPasswordReset,
-    getCharacters,
-    getAllCharacters,
-    saveAllCharacters,
-    saveOneCharacter,
-    removeCharacter,
-    getEnvironments,
-    getAllEnvironments,
-    saveAllEnvironments,
-    removeEnvironment,
-    getWorldById,
-    getWorlds,
-    removeWorld,
-    getMapData,
-    updateMapData,
-    getTimelineData,
-    updateTimelineData,
-    getCampaignById,
-    updateCampaign,
-    updateCampaignSession,
-    removeCampaign,
-    getWorldCampaigns,
-    refreshData 
-  }), [
-    currentUser,
-    isLoading,
-    error,
-    firebaseStatus,
-  ]);
-
+  // Character functions
+  getAllCharacters,
+  getCharacters,
+  saveOneCharacter,
+  deleteOneCharacter,
+  
+  // World functions
+  getWorlds,
+  getWorldById,
+  saveOneWorld,
+  deleteOneWorld,
+  
+  // Environment functions
+  getAllEnvironments,
+  getEnvironmentById,
+  saveOneEnvironment,
+  deleteOneEnvironment,
+  
+  // Campaign functions
+  getWorldCampaigns,
+  getCampaign,
+  updateCampaign,
+  deleteCampaignById,
+  updateCampaignSessionMessages,
+  
+  // Map and Timeline functions
+  loadMapData,
+  saveMap,
+  loadTimelineData,
+  saveTimeline,
+  
+  // User profile functions
+  getProfile,
+  updateProfile,
+  
+  // Export/Import functions
+  exportData,
+  importData,
+  
+  // Diagnostics functions
+  testStorageConnection,
+  
+  // Forum functions
+  getForumPosts: getForumPostsFunc,
+  getForumPost: getForumPostFunc,
+  addForumPost: addForumPostFunc,
+  updateForumPost: updateForumPostFunc,
+  deleteForumPost: deleteForumPostFunc,
+  likeForumPost: likeForumPostFunc,
+  unlikeForumPost: unlikeForumPostFunc,
+  getPostReplies: getPostRepliesFunc,
+  addReplyToPost: addReplyToPostFunc,
+  updateReply: updateReplyFunc,
+  deleteReply: deleteReplyFunc,
+  likeReply: likeReplyFunc,
+  unlikeReply: unlikeReplyFunc
+};
   return (
-    <StorageContext.Provider value={value}>
-      {children}
+    <StorageContext.Provider value={contextValue}>
+      {!loading && children}
     </StorageContext.Provider>
   );
-}
-
-export function useStorage() {
-  return useContext(StorageContext);
 }

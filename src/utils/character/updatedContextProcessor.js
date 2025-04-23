@@ -181,19 +181,14 @@ export const enhanceCharacterAPI = async (characterId, userInput, previousMessag
   }
 };
 
+// Fix for getCharacterById in updatedContextProcessor.js
 export async function getCharacterById(characterId) {
-  console.log(`Fetching character with ID: ${characterId}`);
-
   // Special case for Game Master
   if (characterId === 'GM') {
-    console.log('Creating special GM character');
     return {
       id: 'GM',
       name: 'Game Master',
-      personality: 'An engaging and fair Game Master who narrates the campaign, describes scenes, controls NPCs, and guides the story.',
-      background: 'As the Game Master, you manage the game world and create an immersive experience for the players.',
-      appearance: 'The omniscient narrator and guide of the campaign.',
-      traits: 'Fair, creative, descriptive, adaptable',
+      personality: 'An engaging and fair Game Master...',
       isGameMaster: true,
     };
   }
@@ -209,46 +204,28 @@ export async function getCharacterById(characterId) {
     const userId = auth.currentUser?.uid;
     if (!userId) throw new Error('User not authenticated');
 
-    const idVariations = [
-      characterId,
-      `char_${characterId}`,
-      characterId.startsWith('char_') ? characterId.replace('char_', '') : `char_${characterId}`,
-      characterId.substring(5),
-    ];
-
+    // ALWAYS use the same path
+    const docRef = doc(db, `users/${userId}/characters`, characterId.toString());
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...docSnap.data() };
+    }
+    
+    // If not found by ID, try finding by name as fallback
+    const q = query(
+      collection(db, `users/${userId}/characters`), 
+      where('name', '==', characterId)
+    );
+    const querySnapshot = await getDocs(q);
     let character = null;
-    for (const idToTry of idVariations) {
-      console.log(`Trying ID variation: ${idToTry}`);
-      try {
-        const docRef = doc(db, `users/${userId}/characters`, idToTry);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          character = { id: docSnap.id, ...docSnap.data() };
-          console.log(`Found character using ID format: ${idToTry}`);
-          return character;
-        }
-      } catch (error) {
-        console.warn(`Error fetching character with ID ${idToTry}:`, error);
-      }
-    }
-
-    console.log(`Falling back to matching by name for ID: ${characterId}`);
-    try {
-      const q = query(collection(db, `users/${userId}/characters`), where('name', '==', characterId));
-      const querySnapshot = await getDocs(q);
-      querySnapshot.forEach((doc) => {
-        if (doc.exists()) {
-          character = { id: doc.id, ...doc.data() };
-          console.log(`Found character by name: ${characterId}, ID: ${doc.id}`);
-        }
-      });
-    } catch (error) {
-      console.warn(`Error searching for character by name ${characterId}:`, error);
-    }
-
+    querySnapshot.forEach((doc) => {
+      character = { id: doc.id, ...doc.data() };
+    });
+    
     return character;
   } catch (error) {
-    console.error(`Error in getCharacterById for ID ${characterId}:`, error);
+    console.error(`Error in getCharacterById:`, error);
     return null;
   }
 }
