@@ -182,50 +182,24 @@ export const enhanceCharacterAPI = async (characterId, userInput, previousMessag
 };
 
 // Fix for getCharacterById in updatedContextProcessor.js
-export async function getCharacterById(characterId) {
-  // Special case for Game Master
-  if (characterId === 'GM') {
-    return {
-      id: 'GM',
-      name: 'Game Master',
-      personality: 'An engaging and fair Game Master...',
-      isGameMaster: true,
-    };
-  }
-
-  // Handle null or undefined characterId
-  if (!characterId) {
-    console.error('Character ID is null or undefined');
-    return null;
-  }
-
+export const getCharacterById = async (characterId) => {
   try {
-    const db = getFirestore();
     const userId = auth.currentUser?.uid;
     if (!userId) throw new Error('User not authenticated');
-
-    // ALWAYS use the same path
-    const docRef = doc(db, `users/${userId}/characters`, characterId.toString());
-    const docSnap = await getDoc(docRef);
     
-    if (docSnap.exists()) {
-      return { id: docSnap.id, ...docSnap.data() };
+    const characterRef = doc(db, FIREBASE_PATHS.CHARACTERS(userId), characterId);
+    const characterDoc = await getDoc(characterRef);
+    
+    if (!characterDoc.exists()) {
+      throw new Error(`Character ${characterId} not found`);
     }
     
-    // If not found by ID, try finding by name as fallback
-    const q = query(
-      collection(db, `users/${userId}/characters`), 
-      where('name', '==', characterId)
-    );
-    const querySnapshot = await getDocs(q);
-    let character = null;
-    querySnapshot.forEach((doc) => {
-      character = { id: doc.id, ...doc.data() };
-    });
-    
-    return character;
+    return {
+      id: characterDoc.id,
+      ...characterDoc.data()
+    };
   } catch (error) {
-    console.error(`Error in getCharacterById:`, error);
-    return null;
+    console.error('Error loading character:', error);
+    throw error;
   }
-}
+};

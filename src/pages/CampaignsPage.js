@@ -212,79 +212,79 @@ function CampaignsPage() {
     }
   };
 
-  const createCampaign = async () => {
-    if (isSaving) return;
-    setIsSaving(true);
-    setError(null);
-    
-    try {
-      console.log("Creating campaign...");
-      const parsedWorldId = parseInt(worldId);
+ // Fixed createCampaign function in CampaignsPage.js
+const createCampaign = async () => {
+  if (isSaving) return;
+  setIsSaving(true);
+  setError(null);
   
-      const campaignData = isCreating ?
-        {
-          name: newCampaign.name || `New Campaign in ${world?.name || 'World'}`,
-          description: newCampaign.description || ''
-        } :
-        {
-          name: `New Campaign in ${world?.name || 'World'}`
-        };
-  
-      let campaignToSave;
-      if (draftCampaign) {
-        // Only copy needed fields to avoid circular references
-        campaignToSave = {
-          id: draftCampaign.id,
-          name: campaignData.name,
-          description: campaignData.description,
-          participantIds: draftCampaign.participantIds || [],
-          scenes: draftCampaign.scenes || [],
-          worldId: parsedWorldId,
-          isDraft: false,
-          created: draftCampaign.created,
-          updated: new Date().toISOString(),
-        };
-      } else {
-        campaignToSave = createCampaignModel(parsedWorldId, {
-          ...campaignData,
-          worldId: parsedWorldId,
-          created: new Date().toISOString(),
-          updated: new Date().toISOString(),
-        });
-      }
-  
-      // Ensure we're not passing user object or circular references
-      // Only pass the user ID string
-      console.log("Saving campaign:", campaignToSave);
-      await saveCampaign(campaignToSave, currentUser?.uid);
-      console.log("Campaign saved successfully");
+  try {
+    console.log("Creating campaign...");
+    const parsedWorldId = parseInt(worldId);
 
-      if (world) {
-        const updatedWorld = {
-          ...world,
-          campaignIds: [...(world.campaignIds || []), campaignToSave.id]
-        };
+    const campaignData = isCreating ?
+      {
+        name: newCampaign.name || `New Campaign in ${world?.name || 'World'}`,
+        description: newCampaign.description || ''
+      } :
+      {
+        name: `New Campaign in ${world?.name || 'World'}`
+      };
 
-        const worlds = await loadWorlds(currentUser?.uid);
-        const updatedWorlds = worlds.map(w =>
-          w.id === updatedWorld.id ? updatedWorld : w
-        );
-        await saveWorlds(updatedWorlds, currentUser);
-        setWorld(updatedWorld);
-      }
-
-      setCampaigns([...campaigns, campaignToSave]);
-      setNewCampaign({ name: '', description: '' });
-      setDraftCampaign(null);
-      setIsCreating(false);
-      setHasUnsavedChanges(false);
-      setIsSaving(false);
-    } catch (error) {
-      console.error('Error creating campaign:', error);
-      setError(`Failed to create campaign: ${error.message}`);
-      setIsSaving(false);
+    let campaignToSave;
+    if (draftCampaign) {
+      campaignToSave = {
+        id: draftCampaign.id,
+        name: campaignData.name,
+        description: campaignData.description,
+        participantIds: draftCampaign.participantIds || [],
+        scenes: draftCampaign.scenes || [],
+        worldId: parsedWorldId,
+        isDraft: false,
+        created: draftCampaign.created,
+        updated: new Date().toISOString(),
+      };
+    } else {
+      campaignToSave = createCampaignModel(parsedWorldId, {
+        ...campaignData,
+        worldId: parsedWorldId,
+        created: new Date().toISOString(),
+        updated: new Date().toISOString(),
+      });
     }
-  };
+
+    // CRITICAL: Only pass the user ID string, not the entire user object
+    console.log("Saving campaign:", campaignToSave);
+    await saveCampaign(campaignToSave, currentUser?.uid); // Pass only the uid
+    console.log("Campaign saved successfully");
+
+    // Update world with new campaign
+    if (world) {
+      const updatedWorld = {
+        ...world,
+        campaignIds: [...(world.campaignIds || []), campaignToSave.id]
+      };
+
+      const worlds = await loadWorlds(currentUser?.uid);
+      const updatedWorlds = worlds.map(w =>
+        w.id === updatedWorld.id ? updatedWorld : w
+      );
+      await saveWorlds(updatedWorlds, currentUser?.uid); // Pass only the uid
+      setWorld(updatedWorld);
+    }
+
+    setCampaigns([...campaigns, campaignToSave]);
+    setNewCampaign({ name: '', description: '' });
+    setDraftCampaign(null);
+    setIsCreating(false);
+    setHasUnsavedChanges(false);
+    setIsSaving(false);
+  } catch (error) {
+    console.error('Error creating campaign:', error);
+    setError(`Failed to create campaign: ${error.message}`);
+    setIsSaving(false);
+  }
+};
 
   return (
     <div className="campaigns-page">

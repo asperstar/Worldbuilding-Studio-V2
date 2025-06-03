@@ -4,108 +4,51 @@ import { storage } from '../../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 function CharacterForm({ onSave, onCancel, initialCharacter, isEditing, isSubmitting = false, onChange, currentUser }) {
-// Current state declarations look like this:
-const [character, setCharacter] = useState({
-  name: '',
-  personality: '',
-  background: '',
-  traits: '',
-  appearance: '',
-  imageUrl: '',
-  imageFile: null,
-  imageSource: 'none',
-  writingSample: '',
-  documentUrl: '',
-  documentFile: null,
-});
-const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
-const [imageAnalysisResult, setImageAnalysisResult] = useState(null);
-const [imageUploadError, setImageUploadError] = useState(null);
-// Add this line:
-const [isUploadingImage, setIsUploadingImage] = useState(false);
-const [imagePreview, setImagePreview] = useState(null);
+  const [character, setCharacter] = useState({
+    name: '',
+    personality: '',
+    background: '',
+    traits: '',
+    appearance: '',
+    imageUrl: '',
+    imageFile: null,
+    imageSource: 'none',
+    writingSample: '',
+    documentUrl: '',
+    documentFile: null,
+  });
+  
+  const [imagePreview, setImagePreview] = useState(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const fileInputRef = useRef(null);
-  const [relationships, setRelationships] = useState([]);
-  const [newRelationshipName, setNewRelationshipName] = useState('');
-  const [newRelationshipDesc, setNewRelationshipDesc] = useState('');
-  const documentInputRef = useRef(null);
+  
+  // Track created object URLs for cleanup
+  const objectUrlsRef = useRef(new Set());
 
-  useEffect(() => {
-    if (initialCharacter) {
-      try {
-        const cleanCharacter = Object.keys(initialCharacter).reduce((obj, key) => {
-          if (initialCharacter[key] !== undefined) {
-            obj[key] = initialCharacter[key];
-          }
-          return obj;
-        }, {});
-        
-        setCharacter({
-          ...cleanCharacter,
-          imageSource: initialCharacter.imageUrl ? 'upload' : 'none',
-          imageFile: null,
-          documentFile: null,
-        });
-        
-        setImagePreview(initialCharacter.imageUrl);
-        
-        if (Array.isArray(initialCharacter.relationships)) {
-          setRelationships(initialCharacter.relationships);
-        } else if (typeof initialCharacter.relationships === 'string' && initialCharacter.relationships.trim()) {
-          setRelationships([{
-            name: 'Legacy',
-            relationship: initialCharacter.relationships
-          }]);
-        } else {
-          setRelationships([]);
-        }
-      } catch (error) {
-        console.error("Error initializing form:", error);
-        resetForm();
-      }
-    } else {
-      resetForm();
-    }
-  }, [initialCharacter]);
-
-  const resetForm = () => {
-    setCharacter({
-      name: '',
-      personality: '',
-      background: '',
-      traits: '',
-      appearance: '',
-      imageUrl: '',
-      imageFile: null,
-      imageSource: 'none',
-      writingSample: '',
-      documentUrl: '',
-      documentFile: null,
+  // Cleanup function for object URLs
+  const cleanupObjectUrls = () => {
+    objectUrlsRef.current.forEach(url => {
+      URL.revokeObjectURL(url);
     });
-    setImagePreview(null);
-    setRelationships([]);
-    setImageAnalysisResult(null);
-    setImageUploadError(null);
-    
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-    
-    if (documentInputRef.current) {
-      documentInputRef.current.value = '';
-    }
+    objectUrlsRef.current.clear();
   };
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setCharacter(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    if (onChange) {
-      onChange(e);
-    }
-  };
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cleanupObjectUrls();
+    };
+  }, []);
+
+  // Cleanup when image changes
+  useEffect(() => {
+    return () => {
+      if (imagePreview && objectUrlsRef.current.has(imagePreview)) {
+        URL.revokeObjectURL(imagePreview);
+        objectUrlsRef.current.delete(imagePreview);
+      }
+    };
+  }, [imagePreview]);
 
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
@@ -115,8 +58,15 @@ const [imagePreview, setImagePreview] = useState(null);
     setImageUploadError(null);
     
     try {
-      // Create URL for preview
+      // Cleanup previous preview if exists
+      if (imagePreview && objectUrlsRef.current.has(imagePreview)) {
+        URL.revokeObjectURL(imagePreview);
+        objectUrlsRef.current.delete(imagePreview);
+      }
+      
+      // Create new preview URL
       const previewUrl = URL.createObjectURL(file);
+      objectUrlsRef.current.add(previewUrl);
       setImagePreview(previewUrl);
       
       // Store the file reference for later upload
@@ -255,23 +205,28 @@ const handleDocumentUpload = async (e) => {
     }
   };
 
+ 
   const clearImage = () => {
+    // Cleanup the preview URL
+    if (imagePreview && objectUrlsRef.current.has(imagePreview)) {
+      URL.revokeObjectURL(imagePreview);
+      objectUrlsRef.current.delete(imagePreview);
+    }
+    
     setImagePreview(null);
-    setCharacter(prev => {
-      const updated = {
-        ...prev,
-        imageUrl: '',
-        imageFile: null,
-        imageSource: 'none'
-      };
-      if (onChange) {
-        onChange({ target: { name: 'imageFile', value: null } });
-      }
-      return updated;
-    });
+    setCharacter(prev => ({
+      ...prev,
+      imageUrl: '',
+      imageFile: null,
+      imageSource: 'none'
+    }));
 
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+    
+    if (onChange) {
+      onChange({ target: { name: 'imageFile', value: null } });
     }
   };
 

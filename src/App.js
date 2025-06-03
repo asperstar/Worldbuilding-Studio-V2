@@ -42,6 +42,7 @@ import ForumPostDetailPage from './pages/ForumPostDetailPage';
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setIsLoading] = useState(true);
+  const [authChecked, setAuthChecked] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const toggleSidebar = () => {
@@ -54,7 +55,9 @@ function App() {
     window.isNavigating = true;
     
     // Close sidebar after navigation on mobile
-    setIsSidebarOpen(false);
+    if (window.innerWidth < 768) {
+      setIsSidebarOpen(false);
+    }
     
     // After navigation completes
     setTimeout(() => {
@@ -66,18 +69,26 @@ function App() {
     if (!auth) {
       console.error('Firebase auth is not initialized');
       setIsLoading(false);
+      setAuthChecked(true);
       return;
     }
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      console.log('Auth state changed:', currentUser?.uid);
       setUser(currentUser);
       setIsLoading(false);
+      setAuthChecked(true);
+    }, (error) => {
+      console.error('Auth state change error:', error);
+      setIsLoading(false);
+      setAuthChecked(true);
     });
 
     return () => unsubscribe();
   }, []);
 
-  if (loading) {
+  // Don't render routes until auth is checked
+  if (!authChecked || loading) {
     return (
       <div className="loading-screen">
         <div className="loader"></div>
@@ -85,6 +96,7 @@ function App() {
       </div>
     );
   }
+
 
   return (
     <StorageProvider>

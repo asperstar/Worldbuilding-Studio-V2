@@ -299,29 +299,32 @@ export const deleteCampaign = async (campaignId, userId = null) => {
 export const loadCharacters = async (userId = null, projectId = null) => {
   try {
     const userIdToUse = userId || (await ensureAuthenticated());
-    const constraints = [];
+    
+    // Build query constraints
+    const constraints = [where('userId', '==', userIdToUse)];
+    
+    // Exclude drafts from normal queries
+    constraints.push(where('isDraft', '!=', true));
+    
     if (projectId) {
       constraints.push(where('projectId', '==', projectId));
     }
+    
     const charactersQuery = query(
       collection(db, `users/${userIdToUse}/characters`),
       ...constraints
     );
+    
     const charactersSnapshot = await getDocs(charactersQuery);
-    if (!charactersSnapshot || !charactersSnapshot.docs) {
-      console.warn('No valid snapshot or docs returned');
-      return [];
-    }
-    const characters = charactersSnapshot.docs.map(doc => {
-      const data = doc.data() || {};
-      return {
-        id: doc.id,
-        ...data
-      };
-    }).filter(char => char);
+    
+    const characters = charactersSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
     return characters;
   } catch (error) {
-    console.error('Error loading characters from Firestore:', { message: error.message, code: error.code, stack: error.stack });
+    console.error('Error loading characters:', error);
     return [];
   }
 };
@@ -329,7 +332,6 @@ export const loadCharacters = async (userId = null, projectId = null) => {
 // In saveCharacter function (storageExports.js)
 export const saveCharacter = async (character, userId = null) => {
   try {
-    // Ensure we have a user ID
     const userIdToUse = userId || (await ensureAuthenticated());
     if (!userIdToUse) {
       throw new Error('Cannot save character: no user ID provided');
@@ -337,41 +339,73 @@ export const saveCharacter = async (character, userId = null) => {
     
     // Generate a consistent ID if one doesn't exist
     const characterId = character.id || `char_${Date.now()}`;
-    character.id = characterId;
     
-    // Standardize the collection path - ALWAYS use the same path
+    // ALWAYS use the same consistent path
     const characterRef = doc(db, `users/${userIdToUse}/characters`, characterId.toString());
     
-    // Check if character already exists (by name) to prevent duplicates
-    if (!character.id) {
+    // Check for existing character with same name (excluding drafts)
+    if (!character.isDraft) {
       const charactersQuery = query(
         collection(db, `users/${userIdToUse}/characters`),
         where('name', '==', character.name),
         where('isDraft', '==', false)
       );
       const existingCharacters = await getDocs(charactersQuery);
-      if (!existingCharacters.empty) {
+      
+      // Filter out the current character if updating
+      const duplicates = existingCharacters.docs.filter(doc => doc.id !== characterId);
+      
+      if (duplicates.length > 0) {
         throw new Error(`A character named "${character.name}" already exists`);
       }
     }
     
-    // Remove imageFile from what gets saved to Firestore
-    const { imageFile, ...characterToSave } = character;
+    // Handle image upload if needed
+    let imageUrl = character.imageUrl || '';
+    if (character.imageFile && character.imageFile instanceof File) {
+      const storageRef = ref(storage, `users/${userIdToUse}/characters/${characterId}`);
+      await uploadBytes(storageRef, character.imageFile);
+      imageUrl = await getDownloadURL(storageRef);
+    }
     
-    // Create a clean object to save to Firestore
+    // Remove imageFile and ensure clean data
+    const { imageFile, ...characterData } = character;
+    
     const cleanedCharacter = {
-      ...characterToSave,
+      ...characterData,
+      id: characterId,
+      imageUrl,
       userId: userIdToUse,
-      updated: new Date().toISOString()
+      created: character.created || new Date().toISOString(),
+      updated: new Date().toISOString(),
+      isDraft: character.isDraft || false
     };
     
-    // Save to Firestore with merge to update rather than create duplicates
+    // Save with merge to handle updates
     await setDoc(characterRef, cleanedCharacter, { merge: true });
     
+    // If this was a draft being finalized, clean up any duplicate drafts
+    if (!character.isDraft && character.name) {
+      const draftsQuery = query(
+        collection(db, `users/${userIdToUse}/characters`),
+        where('name', '==', character.name),
+        where('isDraft', '==', true)
+      );
+      const draftDocs = await getDocs(draftsQuery);
+      
+      const batch = writeBatch(db);
+      draftDocs.docs.forEach(doc => {
+        if (doc.id !== characterId) {
+          batch.delete(doc.ref);
+        }
+      });
+      await batch.commit();
+    }
+    
     console.log(`Character ${characterId} saved successfully`);
-    return true;
+    return { id: characterId, ...cleanedCharacter };
   } catch (error) {
-    console.error(`Error saving character ${character.id}:`, error);
+    console.error(`Error saving character:`, error);
     throw error;
   }
 };

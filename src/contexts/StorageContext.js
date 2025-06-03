@@ -141,12 +141,33 @@ export function StorageProvider({ children }) {
   const getAllCharacters = async (forceRefresh = false) => {
     try {
       if (!currentUser) throw new Error('User not authenticated');
-      return await loadCharacters(currentUser.uid);
+      
+      // Use the fixed loadCharacters function that excludes drafts
+      const characters = await loadCharacters(currentUser.uid);
+      
+      // Additional deduplication check
+      const uniqueCharacters = characters.reduce((acc, char) => {
+        const existingIndex = acc.findIndex(c => c.name === char.name && !c.isDraft);
+        if (existingIndex === -1) {
+          acc.push(char);
+        } else {
+          // Keep the most recently updated one
+          const existing = acc[existingIndex];
+          if (new Date(char.updated) > new Date(existing.updated)) {
+            acc[existingIndex] = char;
+          }
+        }
+        return acc;
+      }, []);
+      
+      return uniqueCharacters;
     } catch (err) {
+      console.error('Error in getAllCharacters:', err);
       setError(err.message);
       return [];
     }
   };
+  
 
   const getCharacters = async (userId = null, projectId = null) => {
     try {
@@ -162,12 +183,22 @@ export function StorageProvider({ children }) {
   const saveOneCharacter = async (character) => {
     try {
       if (!currentUser) throw new Error('User not authenticated');
-      return await saveCharacter(character, currentUser.uid);
+      
+      // Use the fixed saveCharacter function
+      const result = await saveCharacter(character, currentUser.uid);
+      
+      // Clear any error state on success
+      setError(null);
+      
+      return result;
     } catch (err) {
+      console.error('Error in saveOneCharacter:', err);
       setError(err.message);
       throw err;
     }
   };
+
+
 
   const deleteOneCharacter = async (characterId) => {
     try {

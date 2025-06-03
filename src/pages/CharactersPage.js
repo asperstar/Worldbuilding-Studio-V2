@@ -216,70 +216,20 @@ function CharactersPage() {
       setIsLoading(true);
       setSaveError(null);
       
-      // Check if character already exists with similar data to prevent duplicates
-      if (!editingCharacter && characters.some(c => c.name === newCharacter.name && !c.isDraft)) {
-        setSaveError(`A character named "${newCharacter.name}" already exists. Please use a different name.`);
-        setIsLoading(false);
-        return;
-      }
-      
-      // Process image if present
-      let imageUrl = newCharacter.imageUrl || '';
-      if (newCharacter.imageFile) {
-        try {
-          const userId = currentUser.uid;
-          const imageId = Date.now().toString();
-          const storageRef = ref(storage, `users/${userId}/characters/${imageId}`);
-          await uploadBytes(storageRef, newCharacter.imageFile);
-          imageUrl = await getDownloadURL(storageRef);
-        } catch (imageError) {
-          console.error("Error uploading image:", imageError);
-          setSaveError("Image upload failed, but character will be saved without image");
-        }
-      }
-  
-      let updatedCharacter;
-      const characterId = editingCharacter ? 
-        editingCharacter.id.toString() : 
-        (draftCharacter ? draftCharacter.id : `char_${Date.now()}`);
-        
-      updatedCharacter = {
+      // Direct save without draft logic
+      const result = await saveOneCharacter({
         ...newCharacter,
-        id: characterId,
-        imageUrl, // Use the uploaded URL
-        imageFile: null, // Don't store file in Firestore
-        created: editingCharacter ? editingCharacter.created : (draftCharacter ? draftCharacter.created : new Date().toISOString()),
-        updated: new Date().toISOString(),
-        userId: currentUser.uid,
-        isDraft: false,
-      };
-  
-      // Save character
-      const saveResult = await saveOneCharacter(updatedCharacter);
+        id: editingCharacter?.id || `char_${Date.now()}`,
+        isDraft: false
+      });
       
-      if (saveResult) {
-        // If we had a draft, remove it from the list
-        if (draftCharacter) {
-          setCharacters(prev => prev.filter(c => c.id !== draftCharacter.id || !c.isDraft));
-        }
+      if (result) {
+        // Refresh the character list
+        const freshCharacters = await getAllCharacters(true);
+        setCharacters(freshCharacters);
         
-        // Update UI state
-        if (editingCharacter) {
-          setCharacters(prevChars =>
-            prevChars.map(char => (char.id === editingCharacter.id ? updatedCharacter : char))
-          );
-        } else {
-          setCharacters(prevChars => {
-            // Ensure we're not adding a duplicate
-            const withoutDrafts = prevChars.filter(c => !(c.isDraft && c.name === updatedCharacter.name));
-            return [...withoutDrafts, updatedCharacter];
-          });
-        }
-        
-        // Reset form state
+        // Reset form
         setEditingCharacter(null);
-        setDraftCharacter(null);
-        setHasUnsavedChanges(false);
         setFormData({
           name: '',
           traits: '',
@@ -287,26 +237,10 @@ function CharactersPage() {
           background: '',
           imageUrl: '',
         });
-        
-        // Refresh data from server to ensure we have the latest
-        try {
-          // Add a slight delay to ensure Firestore has updated
-          setTimeout(async () => {
-            const freshCharacters = await getAllCharacters(true);
-            setCharacters(freshCharacters);
-            // Show a success message
-            setSaveError(null);
-            // You could add a success state/message here
-          }, 1000);
-        } catch (refreshError) {
-          console.error("Error refreshing character list:", refreshError);
-        }
-      } else {
-        setSaveError("Failed to save character. Please try again.");
       }
     } catch (error) {
       console.error("Error saving character:", error);
-      setSaveError(`Failed to save character: ${error.message}`);
+      setSaveError(error.message);
     } finally {
       setIsLoading(false);
     }
